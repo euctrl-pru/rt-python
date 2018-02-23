@@ -1,0 +1,6 @@
+.cache/
+.coverage
+pru/__pycache__/
+apps/__pycache__/
+tests/__pycache__/
+tools/__pycache__/
