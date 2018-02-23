@@ -1,0 +1,194 @@
+#!/usr/bin/env python
+#
+# Copyright (c) 2017-2018 Via Technology Ltd. All Rights Reserved.
+# Consult your license regarding permissions and restrictions.
+
+import unittest
+import numpy as np
+from numpy.testing import assert_almost_equal, assert_array_almost_equal
+from pru.trajectory_functions import *
+
+
+class TestTrajectoryFunctions(unittest.TestCase):
+
+    def test_calculate_leg_durations(self):
+        """Test the calculate_leg_durations function."""
+        start_time = np.datetime64('2017-08-01 11:15')
+        finish_time = np.datetime64('2017-08-01 11:16')
+        datetimes = np.arange(start_time, finish_time, np.timedelta64(5, 's'))
+
+        durations = calculate_leg_durations(datetimes)
+        self.assertEqual(len(durations), len(datetimes))
+
+        self.assertEqual(durations[0], 0.0)
+        for i in range(1, len(datetimes)):
+            self.assertEqual(durations[i], 5.0)
+
+    def test_calculate_altitude_differences(self):
+        """Test the calculate_altitude_differences function."""
+        altitudes = np.array([10000 - 100 * i for i in range(10)],
+                             dtype=float)
+
+        delta_alts = calculate_altitude_differences(altitudes)
+        self.assertEqual(len(delta_alts), len(altitudes))
+
+        self.assertEqual(delta_alts[0], 0.0)
+        for i in range(1, len(delta_alts)):
+            self.assertEqual(delta_alts[i], -100.0)
+
+    def test_calculate_common_period(self):
+        """Test the calculate_common_period function."""
+        datetimes_1 = np.arange(np.datetime64('2017-08-01 11:15'),
+                                np.datetime64('2017-08-01 11:25'),
+                                np.timedelta64(5, 's'))
+
+        datetimes_2 = np.arange(np.datetime64('2017-08-01 11:20'),
+                                np.datetime64('2017-08-01 11:30'),
+                                np.timedelta64(5, 's'))
+
+        start_time = datetimes_2[0]
+        finish_time = datetimes_1[-1]
+
+        start_1, finish_1 = calculate_common_period(datetimes_1, datetimes_2)
+        self.assertEqual(start_1, start_time)
+        self.assertEqual(finish_1, finish_time)
+
+        # test opposite order
+        start_2, finish_2 = calculate_common_period(datetimes_2, datetimes_1)
+        self.assertEqual(start_2, start_time)
+        self.assertEqual(finish_2, finish_time)
+
+    def test_calculate_value_reference_time(self):
+        """Test the calculate_value_reference function with a time series."""
+        start_time = np.datetime64('2017-08-01 11:15')
+        datetimes = np.arange(start_time, np.datetime64('2017-08-01 11:25'),
+                              np.timedelta64(5, 's'))
+
+        start_time = datetimes[0]
+        finish_time = datetimes[-1]
+
+        # use the first value
+        index_1, ratio_1 = calculate_value_reference(datetimes, start_time,
+                                                     is_time=True)
+        self.assertEqual(index_1, 0)
+        self.assertEqual(ratio_1, 0.0)
+
+        # use the last value
+        index_2, ratio_2 = calculate_value_reference(datetimes, finish_time,
+                                                     is_time=True)
+        self.assertEqual(index_2, len(datetimes) - 1)
+        self.assertEqual(ratio_2, 0.0)
+
+        index_3, ratio_3 = calculate_value_reference(datetimes, datetimes[17],
+                                                     is_time=True)
+        self.assertEqual(index_3, 17)
+        self.assertEqual(ratio_3, 0.0)
+
+        time_4 = start_time + np.timedelta64(3, 's')
+        index_4, ratio_4 = calculate_value_reference(datetimes, time_4, is_time=True)
+        self.assertEqual(index_4, 0)
+        self.assertEqual(ratio_4, 0.6)
+
+        time_5 = start_time + np.timedelta64(7, 's')
+        index_5, ratio_5 = calculate_value_reference(datetimes, time_5, is_time=True)
+        self.assertEqual(index_5, 1)
+        self.assertEqual(ratio_5, 0.4)
+
+        time_6 = start_time + np.timedelta64(149, 's')
+        index_6, ratio_6 = calculate_value_reference(datetimes, time_6, is_time=True)
+        self.assertEqual(index_6, 29)
+        self.assertEqual(ratio_6, 0.8)
+
+    def test_calculate_value(self):
+        """Test the calculate_value function with an altitude series."""
+        alts = np.array([20 + i for i in range(10)], dtype=float)
+        alts *= 100
+
+        self.assertEqual(calculate_value(alts, 0), 2000.0)
+        self.assertEqual(calculate_value(alts, 5), 2500.0)
+        self.assertEqual(calculate_value(alts, 5, 0.5), 2550.0)
+        self.assertEqual(calculate_value(alts, 9, 0.5), 2900.0)
+        self.assertEqual(calculate_value(alts, 10, 0.0), 2900.0)
+
+    def test_compare_trajectory_positions(self):
+        """Test the compare_trajectory_positions function."""
+        datetimes_1 = np.arange(np.datetime64('2017-08-01 11:15'),
+                                np.datetime64('2017-08-01 11:25'),
+                                np.timedelta64(1, 'm'))
+
+        datetimes_2 = np.arange(np.datetime64('2017-08-01 11:20'),
+                                np.datetime64('2017-08-01 11:30'),
+                                np.timedelta64(1, 'm'))
+
+        datetimes_3 = np.arange(np.datetime64('2017-08-01 11:24'),
+                                np.datetime64('2017-08-01 11:34'),
+                                np.timedelta64(1, 'm'))
+
+        datetimes_4 = np.arange(np.datetime64('2017-08-01 11:25'),
+                                np.datetime64('2017-08-01 11:35'),
+                                np.timedelta64(1, 'm'))
+
+        LATITUDES = np.zeros(len(datetimes_1), dtype=float)
+        LONGITUDES_1 = np.array([-5 + i for i in range(len(datetimes_1))], dtype=float)
+        ecef_points_1 = calculate_EcefPoints(LATITUDES, LONGITUDES_1)
+
+        values1 = np.zeros(len(datetimes_1), dtype=float)
+
+        alts1 = np.full(len(datetimes_1), 21000.0, dtype=float)
+        alts2 = np.full(len(datetimes_1), 22000.0, dtype=float)
+
+        # Identical trajectories
+        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_1,
+                                                     ecef_points_1, ecef_points_1,
+                                                     alts1, alts1))
+
+        # Different altitudes
+        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_1,
+                                                      ecef_points_1, ecef_points_1,
+                                                      alts1, alts2))
+
+        # Different altitudes, within alt_threshold
+        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_1,
+                                                     ecef_points_1, ecef_points_1,
+                                                     alts1, alts2, alt_threshold=1000.0))
+
+        # Second trajectory delayed by 5 mins
+        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_2,
+                                                      ecef_points_1, ecef_points_1,
+                                                      alts1, alts1))
+
+        # Second trajectory delayed by 10 mins
+        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_3,
+                                                      ecef_points_1, ecef_points_1,
+                                                      alts1, alts1))
+
+        LONGITUDES_2 = np.array([i for i in range(len(datetimes_2))], dtype=float)
+        ecef_points_2 = calculate_EcefPoints(LATITUDES, LONGITUDES_2)
+
+        # Second trajectory delayed by 5 mins, by first trajectory
+        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_2,
+                                                     ecef_points_1, ecef_points_2,
+                                                     alts1, alts1))
+
+        LONGITUDES_3 = np.array([4 + i for i in range(len(datetimes_3))], dtype=float)
+        ecef_points_3 = calculate_EcefPoints(LATITUDES, LONGITUDES_3)
+
+        # Second trajectory delayed by 9 mins, by end of first trajectory
+        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_3,
+                                                     ecef_points_1, ecef_points_3,
+                                                     alts1, alts1))
+
+        # Second trajectory delayed by 10 mins, by end of first trajectory
+        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_4,
+                                                      ecef_points_1, ecef_points_3,
+                                                      alts1, alts1))
+
+        # Second trajectory delayed by 10 mins, by end of first trajectory
+        # with a minutes time_threshold.
+        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_4,
+                                                     ecef_points_1, ecef_points_3,
+                                                     alts1, alts1, time_threshold=60.0))
+
+
+if __name__ == '__main__':
+    unittest.main()
