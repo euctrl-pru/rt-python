@@ -1,0 +1,30 @@
+logging:
+    version: 1
+    formatters:
+        common:
+            format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    handlers:
+        console:
+            class: logging.StreamHandler
+            level: DEBUG
+            formatter: common
+            stream: ext://sys.stdout
+        tests-test-handler:
+            class: logging.FileHandler
+            filename: logs/tests-test-logs.log
+            level: DEBUG
+            formatter: common
+        tests-handler:
+            class: logging.FileHandler
+            filename: logs/tests-logs.log
+            level: DEBUG
+            formatter: common
+    loggers:
+        tests.test_logger:
+            level: WARNING
+            handlers: [tests-test-handler]
+            propagate: yes
+        tests:
+            level: WARNING
+            handlers: [tests-handler]
+            propagate: yes

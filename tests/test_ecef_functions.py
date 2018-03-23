@@ -57,6 +57,15 @@ class TestEcefFunctions(unittest.TestCase):
             expected_result = ECEF_ICOSAHEDRON[i]
             assert_array_almost_equal(ecef_point.coords, expected_result)
 
+    def test_calculate_LatLongs(self):
+        'Test conversion of Icosahedron EcefPoint verticies.'
+        ecef_points = calculate_EcefPoints(PANDAS_ICOSAHEDRON['LAT'],
+                                           PANDAS_ICOSAHEDRON['LON'])
+
+        lats, lons = calculate_LatLongs(ecef_points)
+        assert_array_almost_equal(lats, PANDAS_ICOSAHEDRON['LAT'])
+        assert_array_almost_equal(lons, PANDAS_ICOSAHEDRON['LON'])
+
     def test_calculate_leg_lengths(self):
         'Test calculation of Icosahedron edge lengths.'
 

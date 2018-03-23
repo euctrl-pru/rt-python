@@ -34,6 +34,34 @@ def calculate_EcefPoints(lats, longs):
     return points
 
 
+def calculate_LatLongs(ecef_points):
+    """
+    Construct numpy arrays of Latitudes and Longitudes from an array of
+    EcefPoints.
+
+    Parameters
+    ----------
+    ecef_points: EcefPoint array
+        An array of EcefPoints.
+
+    Returns
+    -------
+    lats: float array
+        A numpy array of Latitudes in [degrees].
+
+    longs: float array
+        A numpy array of Longitudes in [degrees].
+    """
+    lats = np.ndarray(len(ecef_points), dtype=float)
+    longs = np.ndarray(len(ecef_points), dtype=float)
+    for i, point in enumerate(ecef_points):
+        lat_lon = point.to_lat_long()
+        lats[i] = lat_lon[0]
+        longs[i] = lat_lon[1]
+
+    return lats, longs
+
+
 def calculate_leg_lengths(ecef_points):
     """
     Calculates distances (leg lengths) between adjacent ecef_points.
