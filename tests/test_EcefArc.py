@@ -284,6 +284,42 @@ class TestEcefArc(unittest.TestCase):
             else:  # elif i == 1:
                 assert_almost_equal(angle, -result_2)
 
+    def test_calculate_ground_track(self):
+
+        a = EcefPoint(ECEF_ICOSAHEDRON[1])
+        b = EcefPoint(ECEF_ICOSAHEDRON[2])
+        arc_1 = EcefArc(a, b)
+
+        track_1a = arc_1.calculate_ground_track(arc_1.a)
+        assert_almost_equal(np.rad2deg(track_1a), 72.0)
+        track_1b = arc_1.calculate_ground_track(arc_1.b)
+        assert_almost_equal(np.rad2deg(track_1b), 108.0)
+
+        arc_2 = EcefArc(b, a)
+
+        track_2a = arc_2.calculate_ground_track(arc_2.a)
+        assert_almost_equal(np.rad2deg(track_2a), -72.0)
+        track_2b = arc_2.calculate_ground_track(arc_2.b)
+        assert_almost_equal(np.rad2deg(track_2b), -108.0)
+
+        # North pole
+        c = EcefPoint(ECEF_ICOSAHEDRON[0])
+        arc_np = EcefArc(c, a)
+
+        track_np_a = arc_np.calculate_ground_track(arc_np.a)
+        self.assertEqual(track_np_a, np.pi)
+        track_np_b = arc_np.calculate_ground_track(arc_np.b)
+        self.assertEqual(track_np_b, np.pi)
+
+        # South pole
+        d = EcefPoint(ECEF_ICOSAHEDRON[-1])
+        arc_sp = EcefArc(d, a)
+
+        track_sp_a = arc_sp.calculate_ground_track(arc_sp.a)
+        self.assertEqual(track_sp_a, 0.0)
+        track_sp_b = arc_sp.calculate_ground_track(arc_sp.b)
+        self.assertEqual(track_sp_b, 0.0)
+
 
 if __name__ == '__main__':
     unittest.main()

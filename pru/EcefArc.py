@@ -6,8 +6,8 @@ This module supports Great Circle arcs in Earth Centred Earth Fixed (ECEF)
 coordinates.
 """
 import numpy as np
-from numpy import sqrt, sin, cos, arcsin, arccos
-from .EcefPoint import EcefPoint, EPSILON, SQ_EPSILON, MIN_LENGTH, SQ_MIN_LENGTH
+from numpy import sqrt, sin, cos, arcsin, arccos, arctan2
+from .EcefPoint import EcefPoint, EPSILON, SQ_EPSILON, MIN_LENGTH
 
 
 class EcefArc:
@@ -206,3 +206,30 @@ class EcefArc:
             return -angle if (self.cross_track_distance(point) > 0.0) else angle
         else:
             return 0.0
+
+    def calculate_ground_track(self, point):
+        """
+        The ground track angle along the Arc at the point.
+
+        Parameters
+        ----------
+        point: 3d vector
+            The point.
+
+        Returns
+        -------
+        The ground track angle along the Arc from the point relative to
+        True North in [radians].
+        """
+        NORTH_POLE = np.array([0.0, 0.0, 1.0])
+
+        c = np.cross(point, NORTH_POLE)
+        if np.dot(c, c) > SQ_EPSILON:  # point is not close to North or South pole
+            pole_cross_c = np.cross(self.pole, c)
+            sine_angle = np.sqrt(np.dot(pole_cross_c, pole_cross_c))
+            sine_angle = -sine_angle if (np.dot(pole_cross_c, point) < 0) \
+                else sine_angle
+            cosine_angle = np.dot(self.pole, c)
+            return arctan2(sine_angle, cosine_angle)
+        else:  # point is close to the North or South pole
+            return 0.0 if np.dot(point, NORTH_POLE) < 0.0 else np.pi

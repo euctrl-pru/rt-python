@@ -33,6 +33,9 @@ NEW_ID_FIELDS = 'FLIGHT_ID,NEW_FLIGHT_ID\n'
 CSV_FILE_EXTENSION = '.csv'
 """ The file extension of a comma separated variables (csv) file. """
 
+JSON_FILE_EXTENSION = '.json'
+""" The file extension of a JavaScript Object Notation (json) file. """
+
 BZ2_FILE_EXTENSION = '.bz2'
 """ The file extension of a bz2 compressed file. """
 
@@ -56,6 +59,9 @@ ISO8601_DATE_FORMAT = '%Y-%m-%d'
 
 ISO8601_DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 """ The ISO 8601 format of a date time string. """
+
+ISO8601_DATETIME_US_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
+""" The ISO 8601 format of a date time string in micoseconds. """
 
 
 def dms2decimal(degrees, minutes, seconds, negative=False):
@@ -90,10 +96,12 @@ def has_bz2_extension(filename):
     return filename[-len(BZ2_FILE_EXTENSION):] == BZ2_FILE_EXTENSION
 
 
-def read_iso8601_date_string(filename):
-    """ Reads a date string in ISO 8601 format from the end of a csv file. """
+def read_iso8601_date_string(filename, *, is_json=False):
+    """ Reads a date string in ISO 8601 format from the end of a csv or json file. """
     bz2_offset = len(BZ2_FILE_EXTENSION) if has_bz2_extension(filename) else 0
-    date_end = -(len(CSV_FILE_EXTENSION) + bz2_offset)
+    extension_offset = len(JSON_FILE_EXTENSION) if is_json \
+        else len(CSV_FILE_EXTENSION)
+    date_end = -(extension_offset + bz2_offset)
     date_start = date_end - ISO8601_DATE_LENGTH
     return filename[date_start: date_end]
 

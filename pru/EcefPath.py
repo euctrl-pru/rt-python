@@ -14,6 +14,11 @@ from .ecef_functions import calculate_LatLongs, calculate_leg_lengths, \
     calculate_EcefArcs, find_index_and_ratio, calculate_turn_angles
 
 
+class PointType:
+    """The types of EcefPath Points."""
+    Waypoint, TurnStart, TurnFinish = range(3)
+
+
 def calculate_arc_half_lengths(turn_angles, turn_initiation_distances):
     """
     Calculate the half lengths of arcs defined by turn_angles and
@@ -571,3 +576,178 @@ class EcefPath:
             xtds[i] = rad2nm(self.calculate_path_cross_track_distance(points[i],
                                                                       path_index))
         return xtds
+
+    def section_distances_and_types(self):
+        """
+        Calculate the distances to waypoints and starts/finishes of turns along
+        the path.
+
+        Returns
+        -------
+        The along path distances of waypoints and turns in [Nautical Miles].
+        """
+        distances = [0.0]
+        point_types = [PointType.Waypoint]
+
+        waypoint_distance = 0.0
+        for i in range(1, len(self)):
+            # Calculate the cumulative distance to the next waypoint
+            # and the half length of the turn at the next waypoint (if any)
+            waypoint_distance += self.path_lengths[i]
+            turn_half_length = self.turn_half_lengths[i]
+            if turn_half_length:  # if there is a turn
+                # record the distance to the turn start
+                distances.append(waypoint_distance - turn_half_length)
+                point_types.append(PointType.TurnStart)
+
+                # record the distance to the turn finish
+                distances.append(waypoint_distance + turn_half_length)
+                point_types.append(PointType.TurnFinish)
+            else:  # no turn
+                # record the distance to the waypoint
+                distances.append(waypoint_distance)
+                point_types.append(PointType.Waypoint)
+
+        distances_nm = rad2nm(np.array(distances))
+
+        return distances_nm, point_types
+
+    def calculate_positions(self, distances):
+        """
+        Calculate the positions of points at distances along the path.
+
+        Parameters
+        ----------
+        distances: float array
+            An array of ordered path distances along the EcefPath in
+            [Nautical Miles].
+
+        Returns
+        -------
+        points: EcefPoints points array.
+            An array of EcefPoints at distances along the path.
+        """
+        positions = []
+
+        path_index = 0
+        path_distance_nm = 0.0
+        path_length_nm = rad2nm(self.path_lengths[path_index + 1])
+        next_distance = path_distance_nm + path_length_nm
+        for i in range(len(distances)):
+            # Determine whether to advance the path_index
+            if distances[i] > next_distance:
+                if path_index < len(self) - 2:
+                    path_index += 1
+                    path_distance_nm += path_length_nm
+                    path_length_nm = rad2nm(self.path_lengths[path_index + 1])
+                    next_distance = path_distance_nm + path_length_nm
+
+            # Calculate the ratio along the path leg
+            ratio = (distances[i] - path_distance_nm) / path_length_nm
+            position = self.calculate_position(path_index, ratio)
+            positions.append(position)
+
+        return positions
+
+    def calculate_ground_track(self, index, ratio):
+        """
+        Calculate the ground track of a point along the path at index and ratio.
+
+        It calculates whether the point is on a route leg or in a turn at either
+        end of the route leg and then calculates the ground track accordingly.
+
+        Parameters
+        ----------
+        index: integer
+            The index of the point at the start of a route leg.
+
+        ratio: ratio
+            The ratio of the position as its distance along the path divided
+            bu the path length. Note: 0.0 <= ratio < 1.0
+
+        Returns
+        -------
+        The ground track at index and ratio along the path in [radians].
+        """
+        # ensure index is within the points
+        if index < len(self) - 1:
+            # calculate the route leg arc
+            arc = EcefArc(self.points[index], self.points[index + 1])
+
+            #  calculate the distance from the point at index
+            path_length = self.path_lengths[index + 1]
+            distance = ratio * path_length
+
+            # calcuate the distance to the turn by the next point
+            next_turn_distance = path_length - self.turn_half_lengths[index + 1]
+
+            # if point is in a Turn
+            inside_start_turn = (self.turn_half_lengths[index] > 0.0) and \
+                (distance < self.turn_half_lengths[index])
+            inside_finish_turn = (self.turn_half_lengths[index + 1] > 0.0) and \
+                (distance > next_turn_distance)
+            if (inside_start_turn and (index > 0)) or \
+                    (inside_finish_turn and (index < len(self) - 2)):
+                inbound_leg = arc
+                outbound_leg = arc
+                turn_initiation_distance = self.turn_initiation_distances[index]
+                if inside_finish_turn:
+                    turn_initiation_distance = self.turn_initiation_distances[index + 1]
+                    outbound_leg = EcefArc(self.points[index + 1], self.points[index + 2])
+                    distance -= next_turn_distance
+                    ratio = 0.5 * distance / self.turn_half_lengths[index + 1]
+                else:  # inside_start_turn
+                    inbound_leg = EcefArc(self.points[index - 1], self.points[index])
+                    distance += self.turn_half_lengths[index]
+                    ratio = 0.5 * distance / self.turn_half_lengths[index]
+
+                turn_arc = TurnArc(inbound_leg, outbound_leg, turn_initiation_distance)
+                return inbound_leg.calculate_ground_track(turn_arc.start) \
+                    + ratio * turn_arc.angle
+            else:  # point is along straight section
+                # if the leg starts with a turn
+                if self.turn_initiation_distances[index]:
+                    distance += self.turn_initiation_distances[index] - \
+                        self.turn_half_lengths[index]
+                ratio = (distance / self.leg_lengths[index + 1])
+                point = arc.position(ratio * arc.length)
+                return arc.calculate_ground_track(point)
+        else:
+            arc = EcefArc(self.points[-2], self.points[-1])
+            return arc.calculate_ground_track(arc.b)
+
+    def calculate_ground_tracks(self, distances):
+        """
+        Calculate the ground tracks of points at distances along the path.
+
+        Parameters
+        ----------
+        distances: float array
+            An array of ordered path distances along the EcefPath in
+            [Nautical Miles].
+
+        Returns
+        -------
+        ground_tracks: float array.
+            An array of ground_tracks at distances along the path in [radians].
+        """
+        ground_tracks = np.zeros(len(distances), dtype=float)
+
+        path_index = 0
+        path_distance_nm = 0.0
+        path_length_nm = rad2nm(self.path_lengths[path_index + 1])
+        next_distance = path_distance_nm + path_length_nm
+        for i in range(len(distances)):
+            # Determine whether to advance the path_index
+            if distances[i] > next_distance:
+                if path_index < len(self) - 2:
+                    path_index += 1
+                    path_distance_nm += path_length_nm
+                    path_length_nm = rad2nm(self.path_lengths[path_index + 1])
+                    next_distance = path_distance_nm + path_length_nm
+
+            # Calculate the ratio along the path leg
+            ratio = (distances[i] - path_distance_nm) / path_length_nm
+            ground_tracks[i] = self.calculate_ground_track(path_index, ratio)
+
+        return ground_tracks

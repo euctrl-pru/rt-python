@@ -92,6 +92,10 @@ class TestConvertADSBFunctions(unittest.TestCase):
         date2 = read_iso8601_date_string(test_filename2)
         self.assertEqual(date2, '2017-08-01')
 
+        test_filename3 = 'trajectories_2017-08-01.json'
+        date3 = read_iso8601_date_string(test_filename3, is_json=True)
+        self.assertEqual(date3, '2017-08-01')
+
     def test_create_iso8601_csv_filename(self):
 
         test_name = 'fr24_positions_'

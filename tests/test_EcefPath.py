@@ -319,13 +319,25 @@ class TestEcefPath(unittest.TestCase):
         self.assertEqual(index_waypoint, 2)
         assert_almost_equal(ratio_waypoint, 0.0, decimal=6)
 
-    def calculate_path_cross_track_distance(self):
+    def test_calculate_path_cross_track_distance(self):
         ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
 
         ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
 
-        self.assertEqual(ecef_path.calculate_path_cross_track_distance(ecef_points[0], 0), 0.0)
-        self.assertEqual(ecef_path.calculate_path_cross_track_distance(ecef_points[1], 1), 0.0)
+        assert_almost_equal(ecef_path.calculate_path_cross_track_distance(ecef_points[0], 0), 0.0)
+        assert_almost_equal(ecef_path.calculate_path_cross_track_distance(ecef_points[1], 1), 0.0)
+
+        xtd_2_1 = ecef_path.calculate_path_cross_track_distance(ecef_points[2], 1)
+        assert_almost_equal(rad2nm(xtd_2_1), 4.1416795658323213)
+
+        xtd_2_2 = ecef_path.calculate_path_cross_track_distance(ecef_points[2], 2)
+        assert_almost_equal(rad2nm(xtd_2_2), 4.1416795658323213)
+
+        xtd_3_2 = ecef_path.calculate_path_cross_track_distance(ecef_points[3], 2)
+        assert_almost_equal(rad2nm(xtd_3_2), 8.2824069920496726)
+
+        xtd_3_3 = ecef_path.calculate_path_cross_track_distance(ecef_points[3], 3)
+        assert_almost_equal(rad2nm(xtd_3_3), 8.2824069920496726)
 
     def test_EcefPath_calculate_cross_track_distances(self):
         ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
@@ -342,6 +354,78 @@ class TestEcefPath(unittest.TestCase):
         assert_almost_equal(xtds[2], 4.1416795658323213)  # 10NM TID
         assert_almost_equal(xtds[3], 8.2824069920496726)  # 20NM TID
         assert_almost_equal(xtds[-1], 0.0)
+
+    def test_EcefPath_section_distances_and_types(self):
+        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+
+        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+
+        path_distances = rad2nm(ecef_path.path_distances())
+
+        distances, types = ecef_path.section_distances_and_types()
+        self.assertEqual(len(distances), len(ecef_path) + 8)
+        self.assertEqual(len(types), len(ecef_path) + 8)
+
+        self.assertEqual(distances[0], 0.0)
+        self.assertEqual(types[0], PointType.Waypoint)
+
+        self.assertEqual(distances[1], path_distances[1])
+        self.assertEqual(types[1], PointType.Waypoint)
+
+        self.assertTrue(distances[2] < path_distances[2])
+        self.assertEqual(types[2], PointType.TurnStart)
+
+        self.assertTrue(distances[3] > path_distances[2])
+        self.assertEqual(types[3], PointType.TurnFinish)
+
+        self.assertEqual(distances[-2], path_distances[-2])
+        self.assertEqual(types[-2], PointType.Waypoint)
+
+        self.assertEqual(distances[-1], path_distances[-1])
+        self.assertEqual(types[-1], PointType.Waypoint)
+
+    def test_EcefPath_calculate_positions(self):
+        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+
+        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+
+        distances, types = ecef_path.section_distances_and_types()
+
+        positions = ecef_path.calculate_positions(distances)
+        self.assertEqual(len(positions), len(ecef_path) + 8)
+
+        assert_array_almost_equal(positions[0], ecef_points[0])
+        assert_array_almost_equal(positions[1], ecef_points[1])
+        assert_array_almost_equal(positions[-2], ecef_points[-2])
+        assert_array_almost_equal(positions[-1], ecef_points[-1])
+
+    def test_EcefPath_calculate_ground_track(self):
+        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+
+        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+
+        track_0 = ecef_path.calculate_ground_track(0, 0.0)
+        assert_almost_equal(track_0, np.pi / 2, decimal=3)  # close to due East
+
+        track_2_5 = ecef_path.calculate_ground_track(2, 0.5)
+        assert_almost_equal(track_2_5, np.pi)  # due south
+
+        track_2_0 = ecef_path.calculate_ground_track(2, 0.0)
+        assert_almost_equal(track_2_0, 0.75 * np.pi, decimal=3)  # South East
+
+        track_12_0 = ecef_path.calculate_ground_track(12, 0.0)
+        assert_almost_equal(track_12_0, 0.0)  # North
+
+    def test_EcefPath_calculate_ground_tracks(self):
+        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+
+        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+
+        distances, types = ecef_path.section_distances_and_types()
+
+        ground_tracks = ecef_path.calculate_ground_tracks(distances)
+        self.assertEqual(len(ground_tracks), len(ecef_path) + 8)
+        assert_almost_equal(ground_tracks[0], np.pi / 2, decimal=3)
 
 
 if __name__ == '__main__':
