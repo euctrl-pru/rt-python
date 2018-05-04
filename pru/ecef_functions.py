@@ -5,7 +5,7 @@
 This module supports Earth Centred Earth Fixed (ECEF) coordinates.
 """
 import numpy as np
-from .EcefPoint import EcefPoint, distance_radians
+from .EcefPoint import lat_long_to_xyz, distance_radians, EcefPoint
 from .EcefArc import EcefArc
 
 
@@ -27,9 +27,11 @@ def calculate_EcefPoints(lats, longs):
     -------
     ecef_points: a numpy array of EcefPoints
     """
+    xs, ys, zs = lat_long_to_xyz(lats, longs)
+    coords = np.transpose(np.vstack((xs, ys, zs)))
     points = np.ndarray(len(lats), dtype=np.object)
-    for i, lat_long in enumerate(zip(lats, longs)):
-        points[i] = EcefPoint.from_lat_long(lat_long)
+    for i in range(len(lats)):
+        points[i] = EcefPoint(coords[i])
 
     return points
 

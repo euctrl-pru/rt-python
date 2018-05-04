@@ -202,7 +202,7 @@ class TurnArc:
         angle: float
             The angle between point and the start of the turn [radians].
         """
-        radial_pole = np.cross(self.centre, point.coords)
+        radial_pole = np.cross(self.centre, point)
         radial_norm = np.dot(radial_pole, radial_pole)
         if SQ_MIN_LENGTH < radial_norm:
             radial_pole = radial_pole / sqrt(radial_norm)

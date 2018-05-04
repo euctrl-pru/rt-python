@@ -8,7 +8,7 @@ import numpy as np
 from enum import IntEnum, unique
 from .EcefPoint import distance_nm
 from .ecef_functions import calculate_EcefPoints, calculate_leg_lengths
-from .trajectory_functions import calculate_leg_durations
+from .trajectory_functions import calculate_elapsed_times, calculate_min_speed
 
 DEFAULT_MAX_SPEED = 750.0
 'The maximum speed between positions, Knots'
@@ -28,34 +28,6 @@ class ErrorCounts(IntEnum):
     INVALID_ADDRESSES = 2
     INVALID_POSITIONS = 3
     INVALID_ALTITUDES = 4
-
-
-def calculate_min_speed(distance, time, distance_accuracy, time_precision):
-    """
-    Calculate the speed in Knots given the distance and time between
-    positions taking the distance_accuracy and time_precision into account.
-    I.e. the slowest possinble speed between the positions.
-
-    Parameters
-    ----------
-    distance: float
-        The distance positions [Nautical Miles].
-
-    time: float
-        The time between positions [Seconds],
-
-    distance_accuracy: float
-        The maximum distance between positions at the same time [Nautical Miles].
-
-    time_precision: float
-        The precision of time measurement [Seconds].
-
-    Returns
-    -------
-    The speed [Knots] taking the distance_accuracy and time_precision into
-    account.
-    """
-    return 3600.0 * (distance - distance_accuracy) / (time + time_precision)
 
 
 def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
@@ -132,7 +104,8 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
     ecef_points = calculate_EcefPoints(points_df['LAT'].values,
                                        points_df['LON'].values)
     altitudes = points_df['ALT'].values
-    times = points_df['TIME_SOURCE'].values
+    times = calculate_elapsed_times(points_df['TIME_SOURCE'].values,
+                                    points_df['TIME_SOURCE'].values[0])
     ssr_codes = points_df['SSR_CODE'].values
 
     # Counts of errors
@@ -146,7 +119,7 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
         if not invalid_positions.iloc[i]:
             # Calculate speed from previous known good position
             distance = distance_nm(ecef_points[i], ecef_points[ref_i])
-            delta_time = (times[i] - times[ref_i]) / np.timedelta64(1, 's')
+            delta_time = times[i] - times[ref_i]
             speed = calculate_min_speed(distance, delta_time,
                                         distance_accuracy, time_precision)
 

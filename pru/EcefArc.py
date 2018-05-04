@@ -7,7 +7,7 @@ coordinates.
 """
 import numpy as np
 from numpy import sqrt, sin, cos, arcsin, arccos, arctan2
-from .EcefPoint import EcefPoint, EPSILON, SQ_EPSILON, MIN_LENGTH
+from .EcefPoint import distance_radians, EcefPoint, EPSILON, SQ_EPSILON, MIN_LENGTH
 
 
 class EcefArc:
@@ -29,11 +29,11 @@ class EcefArc:
             The start and finish points.
         """
         self.__coords = np.zeros((2, 3), dtype=float)
-        self.__coords[0] = a.coords
-        p = EcefPoint(np.cross(a.coords, b.coords))
+        self.__coords[0] = a
+        p = EcefPoint(np.cross(a, b))
         p.normalize()
-        self.__coords[1] = p.coords
-        self.__length = a.great_circle_distance(b)
+        self.__coords[1] = p
+        self.__length = distance_radians(a, b)
 
     @property
     def coords(self):
@@ -81,8 +81,8 @@ class EcefArc:
             The point at the new position.
 
         """
-        return EcefPoint(cos(distance) * self.a
-                         + sin(distance) * np.cross(self.pole, self.a))
+        return cos(distance) * self.a \
+            + sin(distance) * np.cross(self.pole, self.a)
 
     @property
     def b(self):
@@ -107,8 +107,8 @@ class EcefArc:
         ecef_vector: list of 3 floats
             The point at the new position.
         """
-        return EcefPoint(cos(distance) * np.array(point)
-                         + sin(distance) * self.pole)
+        return cos(distance) * np.array(point) \
+            + sin(distance) * self.pole
 
     def cross_track_distance(self, point):
         """
@@ -141,8 +141,7 @@ class EcefArc:
         positive ahead of a, negative behind a: -pi <= atd <= pi.
         """
         # calculate distance from the Arc start point
-        a = EcefPoint(self.a)
-        atd = a.great_circle_distance(point)
+        atd = distance_radians(self.a, point)
         if atd > EPSILON and atd < (np.pi - EPSILON):
             # calculate across track distance magnitude
             sin2_xtd = np.dot(self.pole, point) ** 2
@@ -154,7 +153,7 @@ class EcefArc:
                     atd = arccos(np.clip(cos(atd) / cos_xtd, -1.0, 1.0))
 
                 # calculate the sign of the distance: +ve ahead, -ve behind
-                ahead = np.dot(np.cross(self.pole, a), point)
+                ahead = np.dot(np.cross(self.pole, self.a), point)
                 return -atd if (ahead < 0) else atd
             else:  # point is close to a pole of the Arc
                 return 0.0
@@ -178,8 +177,8 @@ class EcefArc:
         if (0.0 <= atd <= self.length):
             return np.fabs(self.cross_track_distance(point))
         else:
-            return min(point.great_circle_distance(EcefPoint(self.a)),
-                       point.great_circle_distance(EcefPoint(self.b)))
+            return min(distance_radians(self.a, point),
+                       distance_radians(self.b, point))
 
     def turn_angle(self, point):
         """
@@ -195,14 +194,13 @@ class EcefArc:
         The turn angle from end of the Arc to the point in [radians].
         Note: anti-clockwise is negative.
         """
-        b = EcefPoint(self.b)
-        d = point.great_circle_distance(b)
+        d = distance_radians(self.b, point)
         if (d > MIN_LENGTH):
             # calculate the pole of the arc to the point
-            pole_p = EcefPoint(np.cross(b.coords, point.coords))
+            pole_p = EcefPoint(np.cross(self.b, point))
             pole_p.normalize()
 
-            angle = np.arccos(np.clip(np.dot(self.pole, pole_p.coords), -1.0, 1.0))
+            angle = np.arccos(np.clip(np.dot(self.pole, pole_p), -1.0, 1.0))
             return -angle if (self.cross_track_distance(point) > 0.0) else angle
         else:
             return 0.0

@@ -21,6 +21,54 @@ SQ_MIN_LENGTH = MIN_LENGTH ** 2
 """ The square of the vector minimum length. """
 
 
+def lat_long_to_xyz(latitude, longitude):
+    """
+    Convert a Latitude and Longitude to x, y & z ECEF coordinates.
+    Note: Latitudes > 90 are clamped to the North Pole.
+          Latitudes < -90 are clamped to the South Pole.
+          Latitudes > 180 or < -180 wrap around the International Date Line.
+
+    Parameters
+    ----------
+    latitude_longitude: float
+        A 2 element list of Latitude and Longitude in [degrees].
+
+    Returns
+    -------
+    x,  y, z the x, y and z normalized ECEF coordinates.
+
+    """
+    lat_rad = np.deg2rad(np.clip(latitude, -90.0, 90.0))
+    lon_rad = np.deg2rad(longitude)
+
+    sin_latitude = sin(lat_rad)
+    cos_latitude = sqrt(1.0 - sin_latitude ** 2)
+    x = cos_latitude * cos(lon_rad)
+    y = cos_latitude * sin(lon_rad)
+    z = sin_latitude
+
+    return x, y, z
+
+
+def distance_radians(a, b):
+    """
+    The Great Circle distance between two EcefPoints: a and b.
+
+    Parameters
+    ----------
+    a, b: EcefPoints.
+
+    Returns
+    -------
+    distance: float
+        The Great Circle distance between a and b in [radians].
+    """
+    x = np.cross(a, b)
+    sin_angle = np.sqrt(np.dot(x, x))
+    cos_angle = np.dot(a, b)
+    return arctan2(sin_angle, cos_angle)
+
+
 class EcefPoint:
     """
     A class for an ECEF Point.
@@ -38,7 +86,7 @@ class EcefPoint:
         ----------
         coords: x, y & z coordinates.
         """
-        self.__coords = np.array(coords, dtype=float)
+        self.__coords = coords
 
     @property
     def coords(self):
@@ -84,16 +132,7 @@ class EcefPoint:
         latitude_longitude: float
             A 2 element list of Latitude and Longitude in [degrees].
         """
-        latitude = np.deg2rad(np.clip(latitude_longitude[0], -90.0, 90.0))
-        longitude = np.deg2rad(latitude_longitude[1])
-
-        sin_latitude = sin(latitude)
-        cos_latitude = sqrt(1.0 - sin_latitude ** 2)
-        x = cos_latitude * cos(longitude)
-        y = cos_latitude * sin(longitude)
-        z = sin_latitude
-
-        return cls([x, y, z])
+        return cls(lat_long_to_xyz(latitude_longitude[0], latitude_longitude[1]))
 
     def to_lat_long(self):
         """
@@ -122,7 +161,8 @@ class EcefPoint:
         return 'EcefPoint{}'.format(self.to_lat_long())
 
     def __eq__(self, other):
-        return (self.coords == other.coords).all()
+        delta = other.coords - self.coords
+        return bool(np.dot(delta, delta) <= SQ_EPSILON)
 
     def norm(self):
         'The sum of the squares of the coordinates.'
@@ -134,7 +174,7 @@ class EcefPoint:
 
     def __bool__(self):
         'Returns false if all coords are zero, true otherwise.'
-        return bool(self.coords.any())
+        return bool(self.norm() > 0.0)
 
     def normalize(self):
         """
@@ -152,10 +192,10 @@ class EcefPoint:
             self.__coords = np.zeros(3, dtype=float)
 
     def __neg__(self):
-        return EcefPoint(-self.__coords)
+        return -self.__coords
 
     def __pos__(self):
-        return EcefPoint(self)
+        return self.__coords
 
     def __add__(self, other):
         coords = self.__coords + other.__coords
@@ -183,10 +223,7 @@ class EcefPoint:
         distance: float
             The Great Circle distance between EcefPoints in [radians].
         """
-        x = np.cross(self.coords, other.coords)
-        sin_angle = np.sqrt(np.dot(x, x))
-        cos_angle = np.dot(self.coords, other.coords)
-        return arctan2(sin_angle, cos_angle)
+        return distance_radians(self, other)
 
     def __len__(self):
         return len(self.__coords)
@@ -198,22 +235,6 @@ class EcefPoint:
         else:
             msg = '{cls.__name__} indicies must be integers'
             raise TypeError(msg.format(cls=cls))
-
-
-def distance_radians(a, b):
-    """
-    The Great Circle distance between two EcefPoints: a and b.
-
-    Parameters
-    ----------
-    a, b: EcefPoints.
-
-    Returns
-    -------
-    distance: float
-        The Great Circle distance between a and b in [radians].
-    """
-    return a.great_circle_distance(b)
 
 
 def rad2nm(d):

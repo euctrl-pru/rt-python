@@ -10,6 +10,51 @@ from .EcefPoint import distance_nm
 from .ecef_functions import *
 
 
+def calculate_delta_time(time0, time1):
+    """ Calculate the time difference in seconds between a pair of datetime64s. """
+    return (time1 - time0) / np.timedelta64(1, 's')
+
+
+def calculate_elapsed_times(datetimes, ref_datetime):
+    """
+    Calculate the elapsed times between datetimes and ref_datetime.
+
+    Parameters
+    ----------
+    datetimes: a numpy array of numpy datetime64s
+        An array of datetimes.
+        Note: numpy datetime64s are not compatible with python datetimes.
+
+    ref_datetime: a numpy datetime64s
+        The reference date time.
+
+    Returns
+    -------
+    elapsed_times: a numpy array of float durations from ref_datetime in [Seconds]
+    """
+    return calculate_delta_time(ref_datetime, datetimes)
+
+
+def calculate_date_times(times, ref_datetime):
+    """
+    Calculate the datetimes from elapsed times and ref_datetime.
+
+    Parameters
+    ----------
+    times: a numpy array of float durations from ref_datetime in [Seconds]
+        An array of datetimes.
+
+    ref_datetime: a numpy datetime64s
+        The reference date time.
+
+        Note: numpy datetime64s are not compatible with python datetimes.
+    Returns
+    -------
+    datetimes: a numpy array of numpy datetime64s in microsecond precision.
+    """
+    return ref_datetime + 1000000.0 * times * np.timedelta64(1, 'us')
+
+
 def calculate_leg_durations(datetimes):
     """
     Calculate leg durations (in seconds) between adjacent datetimes.
@@ -25,13 +70,87 @@ def calculate_leg_durations(datetimes):
     durations: a numpy array of float durations between datetimes in [Seconds]
     Note: the first value is always zero.
     """
-    durations = np.zeros(len(datetimes), dtype=float)
-    prev_time = datetimes[0]
-    for i, time in enumerate(datetimes):
-        durations[i] = (time - prev_time) / np.timedelta64(1, 's')
-        prev_time = time
+    times = calculate_elapsed_times(datetimes, datetimes[0])
+    return np.ediff1d(times, to_begin=[0])
 
-    return durations
+
+def calculate_speed(distance, time, *, min_time=0.5):
+    """
+    Calculate the speed in Knots given the distance and time.
+
+    Parameters
+    ----------
+    distance: float
+        The distance [Nautical Miles].
+
+    time: float
+        The time [Seconds].
+
+    min_time: float
+        The minimum time, default 0.5 [Seconds].
+
+    Note: if time is not greater than zero, min_time is used instead.
+
+    Returns
+    -------
+    The speed [Knots]
+
+    """
+    return 3600.0 * distance / np.where(time > 0.0, time, min_time)
+
+
+def calculate_min_speed(distance, time, distance_accuracy, time_precision):
+    """
+    Calculate the speed in Knots given the distance and time between
+    positions taking the distance_accuracy and time_precision into account.
+    I.e. the slowest possible speed between the positions.
+
+    Parameters
+    ----------
+    distance: float
+        The distance positions [Nautical Miles].
+
+    time: float
+        The time between positions [Seconds].
+
+    distance_accuracy: float
+        The maximum distance between positions at the same time [Nautical Miles].
+
+    time_precision: float
+        The precision of time measurement [Seconds].
+
+    Returns
+    -------
+    The speed [Knots] taking the distance_accuracy and time_precision into
+    account.
+    """
+    return calculate_speed(distance - distance_accuracy, time + time_precision)
+
+
+def find_duplicate_values(values, min_value):
+    """
+    Find positions of values < min_value from the previous value.
+
+    Parameters
+    ----------
+    values: a numpy array of floats
+        The values.
+
+    min_value: float
+        The minimum difference between positions.
+        Note: pre condition min_value < 100
+
+    Returns
+    -------
+        A numpy boolean array with duplicate values set to True.
+
+    """
+    return np.ediff1d(values, to_begin=100) < min_value
+
+
+def max_delta(deltas):
+    """ Return the most extreme value (positive or negative). """
+    return max(deltas.max(), abs(deltas.min()))
 
 
 def calculate_altitude_differences(alts):
@@ -48,13 +167,50 @@ def calculate_altitude_differences(alts):
     delta_alts: a numpy array of float differences between altitudes [feet]
     Note: the first value is always zero.
     """
-    delta_alts = np.zeros(len(alts), dtype=float)
-    prev_alt = alts[0]
-    for i, alt in enumerate(alts):
-        delta_alts[i] = alt - prev_alt
-        prev_alt = alt
+    return np.ediff1d(alts, to_begin=[0])
 
-    return delta_alts
+
+def calculate_vertical_speed(altitude, time, *, min_time=0.5):
+    """
+    Calculate the vertical speed in feet per minute given the altitude and time.
+
+    Parameters
+    ----------
+    altitude: float
+        The altitude [feet].
+
+    time: float
+        The time [Seconds].
+
+    min_time: float
+        The minimum time, default 0.5 [Seconds].
+
+    Note: if time is not greater than zero, min_time is used instead.
+
+    Returns
+    -------
+    The vertical speed [feet per minute]
+
+    """
+    return 60.0 * altitude / np.where(time > 0.0, time, min_time)
+
+
+def convert_angle_to_track_angle(angle):
+    """
+    Convert angles in radians to angles in degrees from 0 to 360.
+
+    Note: uses the numpy ufunc: where so that it also operates on numpy arrays.
+
+    Parameters
+    ----------
+    angle: float
+        An angle in [radians].
+
+    Returns
+    -------
+    The angle in [degrees], where 0.0 <= angle < 360.0.
+    """
+    return np.rad2deg(np.where(angle < 0.0, angle + 2.0 * np.pi, angle))
 
 
 def calculate_common_period(a_times, b_times):
@@ -103,11 +259,12 @@ def calculate_value_reference(values, value, *, is_time=False):
     index_value = values[index]
     if (index > 0) and (value < index_value):
         index -= 1
-        denom = index_value - values[index]
-        denom = denom / np.timedelta64(1, 's') if is_time else denom
+        denom = calculate_delta_time(values[index], index_value) if is_time else \
+            index_value - values[index]
+
         if (denom > 0.0):
-            delta = value - values[index]
-            delta = delta / np.timedelta64(1, 's') if is_time else delta
+            delta = calculate_delta_time(values[index], value) if is_time else \
+                value - values[index]
             ratio = delta / denom
 
     return index, ratio
@@ -180,7 +337,7 @@ def compare_trajectory_positions(a_times, b_times, a_points, b_points,
     """
     distance = 0.0
     start_time, finish_time = calculate_common_period(a_times, b_times)
-    delta_time = (start_time - finish_time) / np.timedelta64(1, 's')
+    delta_time = calculate_delta_time(finish_time, start_time)
     if delta_time < 0.0:   # times overlap
         # Calculate distance between points at the start
         a_index, a_ratio = calculate_value_reference(a_times, start_time, is_time=True)

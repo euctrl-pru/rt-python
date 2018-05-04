@@ -9,13 +9,15 @@ import pandas as pd
 from scipy.interpolate import CubicSpline
 from .EcefPath import PointType, EcefPath
 from .ecef_functions import calculate_EcefPoints, calculate_LatLongs
-from pru.trajectory_fields import POSITION_FIELDS
+from .trajectory_functions import calculate_date_times, calculate_speed, \
+    calculate_vertical_speed, convert_angle_to_track_angle
+from .trajectory_fields import POSITION_FIELDS
 
-DEFAULT_STRAIGHT_INTERVAL = 6.0
-""" The default straight section interval, 6 seconds. """
+DEFAULT_STRAIGHT_INTERVAL = 5.0
+""" The default straight section interval, 5 seconds. """
 
-DEFAULT_TURN_INTERVAL = 1.0
-""" The default turn section interval, 1 second. """
+DEFAULT_TURN_INTERVAL = 5.0
+""" The default turn section interval, 5 seconds. """
 
 POSITION_FIELD_LIST = POSITION_FIELDS.split(',')[:-4]
 """ The output position fields. """
@@ -156,7 +158,7 @@ def calculate_speeds(times, distances):
     """
     delta_times = np.ediff1d(times)
     delta_distances = np.ediff1d(distances)
-    speeds = 3600.0 * delta_distances / delta_times
+    speeds = calculate_speed(delta_distances, delta_times)
 
     last_value = speeds[-1]
     return np.append(speeds, last_value)
@@ -181,30 +183,10 @@ def calculate_vertical_speeds(times, altitudes):
     """
     delta_times = np.ediff1d(times)
     delta_altitudes = np.ediff1d(altitudes)
-    vertical_speeds = 60.0 * delta_altitudes / delta_times
+    vertical_speeds = calculate_vertical_speed(delta_altitudes, delta_times)
 
     last_value = vertical_speeds[-1]
     return np.append(vertical_speeds, last_value)
-
-
-def convert_ground_tracks(angles):
-    """
-    Convert ground track angles from radians to degrees.
-
-    Parameters
-    ----------
-    angles: float array
-        An array of angles in [radians].
-
-    Returns
-    -------
-    tracks : float array
-        The ground tracks in [degrees], where 0.0 <= track < 360.0.
-    """
-    tracks = np.zeros(len(angles))
-    for i, angle in enumerate(angles):
-        tracks[i] = np.rad2deg(angle + 2.0 * np.pi if angle < 0.0 else angle)
-    return tracks
 
 
 def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interval):
@@ -257,11 +239,11 @@ def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interv
 
     # calculate speeds, etc from times, distances and altitudes
     speeds = calculate_speeds(times, distances)
-    ground_tracks = convert_ground_tracks(ecef_path.calculate_ground_tracks(distances))
+    ground_tracks = convert_angle_to_track_angle(ecef_path.calculate_ground_tracks(distances))
     vert_speeds = calculate_vertical_speeds(times, altitudes)
 
-    # convert times to date_times
-    date_times = smooth_traj.timep.start_time + times * np.timedelta64(1, 's')
+    # convert elapsed times to date_times
+    date_times = calculate_date_times(times, smooth_traj.timep.start_time)
 
     # Create an array of flight_ids
     flight_id = np.array(len(date_times), dtype=np.string_)
