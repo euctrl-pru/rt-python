@@ -8,13 +8,23 @@ Software to match Eurocontrol Correlated Position Report (CPR) and ADS-B traject
 
 import sys
 import os
+import errno
 import pandas as pd
 import uuid
 from pru.ecef_functions import calculate_EcefPoints
 from pru.trajectory_functions import compare_trajectory_positions
 from pru.trajectory_fields import read_iso8601_date_string, \
-    is_valid_iso8601_date, create_iso8601_csv_filename, NEW_ID_FIELDS
+    is_valid_iso8601_date, NEW_ID_FIELDS
+from pru.trajectory_files import create_match_cpr_adsb_output_filenames
 from pru.logger import logger
+
+log = logger(__name__)
+
+DEFAULT_MATCHING_DISTANCE_THRESHOLD = 2.0
+'Maximum distance between points. Nautical Miles'
+
+DEFAULT_MATCHING_ALTITUDE_THRESHOLD = 500.0
+'Maximum altitude between points. Feet'
 
 
 def verify_flight_matches(flight_matches, cpr_positions, adsb_positions,
@@ -100,51 +110,27 @@ def allocate_remaining_ids(flight_ids, df_fight_ids):
             flight_ids[id] = uuid.uuid4()
 
 
-if __name__ == '__main__':
+input_filenames = ['cpr flights file',
+                   'adsb flights file',
+                   'cpr positions file',
+                   'adsb positions file']
+""" The filenames required by the function. """
 
-    input_filenames = ['cpr flights file',
-                       'adsb flights file',
-                       'cpr positions file',
-                       'adsb positions file']
-    """ The filenames required by the function. """
 
-    filenames_string = '> <'.join(input_filenames)
-    """ A string to inform the user of the required filenames """
-
-    app_name = os.path.basename(sys.argv[0])
-    if len(sys.argv) <= len(input_filenames):
-        print('Usage: ' + app_name + ' <' + filenames_string + '>'
-              ' [distance_threshold] [altitude_threshold]')
-        sys.exit(2)
-
-    log = logger(app_name)
-
-    cpr_flights_filename = sys.argv[1]
-    adsb_flights_filename = sys.argv[2]
-
-    # Note positions files must be 'clean'
-    cpr_positions_filename = sys.argv[3]
-    adsb_positions_filename = sys.argv[4]
-
-    distance_threshold = 2.0  # Nautical Miles
-    if len(sys.argv) > (len(input_filenames) + 1):
-        distance_threshold = float(sys.argv[5])
-
-    alt_threshold = 500.0  # feet
-    if len(sys.argv) > (len(input_filenames) + 2):
-        alt_threshold = float(sys.argv[6])
+def match_cpr_adsb_trajectories(filenames, distance_threshold=DEFAULT_MATCHING_DISTANCE_THRESHOLD,
+                                alt_threshold=DEFAULT_MATCHING_ALTITUDE_THRESHOLD):
 
     # Extract date strings from the input filenames and validate them
     input_date_strings = [''] * len(input_filenames)
     for i in range(len(input_filenames)):
-        filename = sys.argv[i + 1]
+        filename = filenames[i]
         input_date_strings[i] = read_iso8601_date_string(filename)
         if is_valid_iso8601_date(input_date_strings[i]):
             log.info('%s: %s', input_filenames[i], filename)
         else:
             log.error('%s: %s, invalid date: %s',
                       input_filenames[i], filename, input_date_strings[i])
-            sys.exit(2)
+            return errno.EINVAL
 
     # Ensure that files are all for the same date
     if input_date_strings[1:] != input_date_strings[:-1]:
@@ -153,7 +139,14 @@ if __name__ == '__main__':
                   ' CPR Positions date: %s, ADSB Positions date: %s',
                   input_date_strings[0], input_date_strings[1],
                   input_date_strings[2], input_date_strings[3])
-        sys.exit(2)
+        return errno.EINVAL
+
+    cpr_flights_filename = filenames[0]
+    adsb_flights_filename = filenames[1]
+
+    # Note positions files must be 'clean'
+    cpr_positions_filename = filenames[2]
+    adsb_positions_filename = filenames[3]
 
     log.info('Distance threshold: %f', distance_threshold)
     log.info('Altitude threshold: %f', alt_threshold)
@@ -169,11 +162,12 @@ if __name__ == '__main__':
                                      converters={'FLIGHT_ID': lambda x: int(x)},
                                      usecols=['FLIGHT_ID', 'CALLSIGN',
                                               'AIRCRAFT_ADDRESS', 'ADEP', 'ADES',
-                                              'PERIOD_START', 'PERIOD_FINISH'])
+                                              'PERIOD_START', 'PERIOD_FINISH'],
+                                     memory_map=True)
         log.info('cpr flights read ok')
     except EnvironmentError:
         log.error('could not read file: %s', cpr_flights_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     # Read ADS-B flights into a pandas DataFrame
     adsb_flights_df = pd.DataFrame()
@@ -183,11 +177,12 @@ if __name__ == '__main__':
                                       converters={'FLIGHT_ID': lambda x: int(x, 16)},
                                       usecols=['FLIGHT_ID', 'CALLSIGN',
                                                'AIRCRAFT_ADDRESS', 'ADEP', 'ADES',
-                                               'PERIOD_START', 'PERIOD_FINISH'])
+                                               'PERIOD_START', 'PERIOD_FINISH'],
+                                      memory_map=True)
         log.info('adsb flights read ok')
     except EnvironmentError:
         log.error('could not read file: %s', adsb_flights_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     # Read CPR points into a pandas DataFrame
     cpr_points_df = pd.DataFrame()
@@ -196,10 +191,11 @@ if __name__ == '__main__':
                                     parse_dates=['TIME_SOURCE'], index_col='FLIGHT_ID',
                                     converters={'FLIGHT_ID': lambda x: int(x)},
                                     usecols=['FLIGHT_ID', 'TIME_SOURCE',
-                                             'LAT', 'LON', 'ALT'])
+                                             'LAT', 'LON', 'ALT'],
+                                    memory_map=True)
     except EnvironmentError:
         log.error('could not read file: %s', cpr_positions_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('cpr points read ok')
 
@@ -210,10 +206,11 @@ if __name__ == '__main__':
                                      parse_dates=['TIME_SOURCE'], index_col='FLIGHT_ID',
                                      converters={'FLIGHT_ID': lambda x: int(x, 16)},
                                      usecols=['FLIGHT_ID', 'TIME_SOURCE',
-                                              'LAT', 'LON', 'ALT'])
+                                              'LAT', 'LON', 'ALT'],
+                                     memory_map=True)
     except EnvironmentError:
         log.error('could not read file: %s', adsb_positions_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('adsb points read ok')
 
@@ -293,8 +290,8 @@ if __name__ == '__main__':
     # Output the matching ids
 
     # Output the CPR ids
-    cpr_ids_file = create_iso8601_csv_filename('cpr_matching_ids_',
-                                               input_date_strings[0])
+    output_files = create_match_cpr_adsb_output_filenames(input_date_strings[0])
+    cpr_ids_file = output_files[0]
     try:
         with open(cpr_ids_file, 'w') as file:
             file.write(NEW_ID_FIELDS)
@@ -303,13 +300,12 @@ if __name__ == '__main__':
                 print(key, value, sep=',', file=file)
     except EnvironmentError:
         log.error('could not write file: %s', cpr_ids_file)
-        sys.exit(2)
+        return errno.EACCES
 
     log.info('written file: %s', cpr_ids_file)
 
     # Output the ADS-B ids
-    adsb_ids_file = create_iso8601_csv_filename('fr24_matching_ids_',
-                                                input_date_strings[0])
+    adsb_ids_file = output_files[1]
     try:
         with open(adsb_ids_file, 'w', newline='') as file:
             file.write(NEW_ID_FIELDS)
@@ -318,8 +314,35 @@ if __name__ == '__main__':
                 print(adsb_str, file=file)
     except EnvironmentError:
         log.error('could not write file: %s', adsb_ids_file)
-        sys.exit(2)
+        return errno.EACCES
 
     log.info('written file: %s', adsb_ids_file)
 
     log.info('matching complete')
+
+    return 0
+
+
+if __name__ == '__main__':
+
+    filenames_string = '> <'.join(input_filenames)
+    """ A string to inform the user of the required filenames """
+
+    app_name = os.path.basename(sys.argv[0])
+    if len(sys.argv) <= len(input_filenames):
+        print('Usage: ' + app_name + ' <' + filenames_string + '>'
+              ' [distance_threshold] [altitude_threshold]')
+        sys.exit(errno.EINVAL)
+
+    distance_threshold = DEFAULT_MATCHING_DISTANCE_THRESHOLD
+    if len(sys.argv) > (len(input_filenames) + 1):
+        distance_threshold = float(sys.argv[5])
+
+    alt_threshold = DEFAULT_MATCHING_ALTITUDE_THRESHOLD
+    if len(sys.argv) > (len(input_filenames) + 2):
+        alt_threshold = float(sys.argv[6])
+
+    error_code = match_cpr_adsb_trajectories(sys.argv[1:5],
+                                             distance_threshold, alt_threshold)
+    if error_code:
+        sys.exit(error_code)

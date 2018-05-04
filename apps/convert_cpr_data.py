@@ -2,20 +2,25 @@
 #
 # Copyright (c) 2017-2018 Via Technology Ltd. All Rights Reserved.
 # Consult your license regarding permissions and restrictions.
-#
-# Software to read a Eurocontrol archieved Correlated Position Report (CPR) file.
+"""
+Software to read a Eurocontrol archieved Correlated Position Report (CPR) file.
+"""
 
 import sys
 import os
 import gzip
 import csv
+import errno
 import pandas as pd
 from enum import IntEnum, unique
 import datetime
 from pru.trajectory_fields import \
     FLIGHT_FIELDS, FLIGHT_EVENT_FIELDS, POSITION_FIELDS, dms2decimal, \
-    FlightEventType, ISO8601_DATE_FORMAT, create_iso8601_csv_filename
+    FlightEventType, ISO8601_DATE_FORMAT
+from pru.trajectory_files import create_convert_cpr_filenames
 from pru.logger import logger
+
+log = logger(__name__)
 
 
 @unique
@@ -44,9 +49,6 @@ class CprField(IntEnum):
     IFPS_ID = 20
     AIRCRAFT_ADDRESS = 21
 
-
-MAX_SSR_CODES = 10
-""" The maximum number of SSR codes to output per flight. """
 
 CPR_DATE_FORMAT = '%Y%m%d'
 """ The format of a date string in a CPR filename. """
@@ -104,7 +106,7 @@ class CprPosition:
     'A class for reading, storing and outputting a postion from a CPR file line entry'
 
     def __init__(self, cpr_fields):
-        self.id = int(cpr_fields[CprField.TACT_ID]) if cpr_fields[CprField.TACT_ID] else 0
+        self.id = int(cpr_fields[CprField.TACT_ID])
         self.date_time = cpr_datetime_parser(cpr_fields[CprField.DATE_TIME])
         self.sac = int(cpr_fields[CprField.SAC]) if cpr_fields[CprField.SAC] else 0
         self.sic = int(cpr_fields[CprField.SIC]) if cpr_fields[CprField.SIC] else 0
@@ -158,7 +160,7 @@ class CprFlight:
     'A class for reading, storing and outputting data for a CPR flight'
 
     def __init__(self, cpr_fields):
-        self.id = int(cpr_fields[CprField.TACT_ID]) if cpr_fields[CprField.TACT_ID] else 0
+        self.id = int(cpr_fields[CprField.TACT_ID])
         self.callsign = cpr_fields[CprField.CALLSIGN]
         self.departure = cpr_fields[CprField.DEPARTURE]
         self.destination = cpr_fields[CprField.DESTINATION]
@@ -166,7 +168,7 @@ class CprFlight:
             if (0 < len(cpr_fields[CprField.EOBT])) else ''
         self.aircraft_address = ''
         self.callsign2 = ''
-        self.aircraft_address2 = ''
+        self.aircraft_address2 = []
         self.aircraft_addresses = []
         self.ssr_codes = []
         self.positions = []
@@ -195,15 +197,13 @@ class CprFlight:
         addresses = aircraft_addresses.value_counts().index.tolist()
         if addresses:
             self.aircraft_address = addresses[0]
+            # aircraft_address2 lists multiple aircraft_addresses, if any
             if len(addresses) > 1:
-                self.aircraft_address2 = addresses[1]
+                self.aircraft_address2 = addresses[1:]
 
         # Ignore 0000 squawks
         if self.ssr_codes and ('0000' in self.ssr_codes):
             self.ssr_codes.remove('0000')
-
-        if len(self.ssr_codes) > MAX_SSR_CODES:
-            self.ssr_codes = self.ssr_codes[: MAX_SSR_CODES]
 
     def is_valid(self):
         """ Determine whether flight is valid """
@@ -212,10 +212,7 @@ class CprFlight:
     def __repr__(self):
         ssr_code_str = ''
         if self.ssr_codes:
-            for ssr_code in self.ssr_codes:
-                ssr_code_str += ssr_code + ' '
-
-            ssr_code_str = ssr_code_str[: -1]
+            ssr_code_str = ' '.join(self.ssr_codes)
 
         return '{:d},{},,,{},{},{},\'{}\',{}Z,{}Z,{}'. \
             format(self.id, self.callsign, self.aircraft_address,
@@ -225,15 +222,7 @@ class CprFlight:
                    self.aircraft_address2)
 
 
-if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print('Usage: convert_cpr_data.py <filename>')
-        sys.exit(2)
-
-    log = logger(os.path.basename(sys.argv[0]))
-
-    filename = sys.argv[1]
-
+def convert_cpr_data(filename):
     # Extract the date string from the filename and validate it
     file_date = os.path.basename(filename)[2:10]
     date = datetime.time()
@@ -242,7 +231,7 @@ if __name__ == '__main__':
     except ValueError:
         log.error('cpr positions file: %s, invalid date: %s',
                   filename, file_date)
-        sys.exit(2)
+        return errno.EINVAL
 
     # Convert the file date string into ISO 8601 format
     file_date = date.strftime(ISO8601_DATE_FORMAT)
@@ -259,12 +248,14 @@ if __name__ == '__main__':
                 open(filename, 'r') as file:
             reader = csv.reader(file, delimiter=';')
             for row in reader:
-                flights.setdefault(row[CprField.TACT_ID],
-                                   CprFlight(row)).append(row)
+                # Only process lines with a valid TACT_ID
+                flight_id = row[CprField.TACT_ID]
+                if flight_id:
+                    flights.setdefault(flight_id, CprFlight(row)).append(row)
 
     except EnvironmentError:
         log.error('could not read file: %s', filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     # sort positions in date time (time of track) order
     for key, values in flights.items():
@@ -274,7 +265,8 @@ if __name__ == '__main__':
     valid_flights = 0
 
     # Output the CPR flight data for all valid flights
-    flight_file = create_iso8601_csv_filename('cpr_flights_', file_date)
+    output_files = create_convert_cpr_filenames(file_date)
+    flight_file = output_files[0]
     try:
         with open(flight_file, 'w') as file:
             file.write(FLIGHT_FIELDS)
@@ -283,13 +275,13 @@ if __name__ == '__main__':
                     print(value, file=file)
                     valid_flights += 1
 
+        log.info('written file: %s', flight_file)
+
     except EnvironmentError:
         log.error('could not write file: %s', flight_file)
 
-    log.info('written file: %s', flight_file)
-
     # Output the CPR event data for all valid flights
-    events_file = create_iso8601_csv_filename('cpr_events_', file_date)
+    events_file = output_files[1]
     try:
         with open(events_file, 'w') as file:
             file.write(FLIGHT_EVENT_FIELDS)
@@ -300,13 +292,13 @@ if __name__ == '__main__':
                     print(key, int(FlightEventType.SCHEDULED_OFF_BLOCK),
                           scheduled_time, sep=',', file=file)
 
+        log.info('written file: %s', events_file)
+
     except EnvironmentError:
         log.error('could not write file: %s', events_file)
 
-    log.info('written file: %s', events_file)
-
     # Output the CPR position data for all flights
-    positions_file = create_iso8601_csv_filename('cpr_positions_', file_date)
+    positions_file = output_files[2]
     try:
         with open(positions_file, 'w') as file:
             file.write(POSITION_FIELDS)
@@ -315,10 +307,23 @@ if __name__ == '__main__':
                     for pos in value.positions:
                         print(pos, file=file)
 
+        log.info('written file: %s', positions_file)
+
     except EnvironmentError:
         log.error('could not write file: %s', positions_file)
-
-    log.info('written file: %s', positions_file)
+        return errno.EACCES
 
     log.info('cpr conversion complete for %s flights on %s',
              valid_flights, file_date)
+
+    return 0
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print('Usage: convert_cpr_data.py <filename>')
+        sys.exit(errno.EINVAL)
+
+    error_code = convert_cpr_data(sys.argv[1])
+    if error_code:
+        sys.exit(error_code)

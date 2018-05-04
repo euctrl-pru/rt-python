@@ -8,14 +8,18 @@ Software to match trajectories on consecutive days.
 
 import sys
 import os
+import errno
 import numpy as np
 import pandas as pd
 from uuid import UUID
 from pru.ecef_functions import calculate_EcefPoints
 from pru.trajectory_functions import compare_trajectory_positions
 from pru.trajectory_fields import read_iso8601_date_string, \
-    is_valid_iso8601_date, create_iso8601_csv_filename, NEW_ID_FIELDS
+    is_valid_iso8601_date, NEW_ID_FIELDS
+from pru.trajectory_files import create_matching_ids_filename, PREV_DAY
 from pru.logger import logger
+
+log = logger(__name__)
 
 DEFAULT_MAXIMUM_TIME_DELTA = 150  # 2.5 minutes
 """ The default maximum time difference, in seconds. """
@@ -63,47 +67,34 @@ def verify_matches(flight_matches, positions1, positions2, flight_ids, delta_tim
     return matches
 
 
-if __name__ == '__main__':
+input_filenames = ['prev flights file',
+                   'next flights file',
+                   'prev positions file',
+                   'next positions file']
+""" The filenames required by the application. """
 
-    input_filenames = ['prev flights file',
-                       'next flights file',
-                       'prev positions file',
-                       'next positions file']
-    """ The filenames required by the application. """
 
-    filenames_string = '> <'.join(input_filenames)
-    """ A string to inform the user of the required filenames. """
+def match_consecutive_day_trajectories(filenames,
+                                       max_time_difference=DEFAULT_MAXIMUM_TIME_DELTA):
 
-    app_name = os.path.basename(sys.argv[0])
-    if len(sys.argv) <= len(input_filenames):
-        print('Usage: ' + app_name + ' <' + filenames_string + '>'
-              ' [maximum time difference]')
-        sys.exit(2)
-
-    log = logger(app_name)
-
-    prev_flights_filename = sys.argv[1]
-    next_flights_filename = sys.argv[2]
+    prev_flights_filename = filenames[0]
+    next_flights_filename = filenames[1]
 
     # Note positions files must be 'clean'
-    prev_positions_filename = sys.argv[3]
-    next_positions_filename = sys.argv[4]
-
-    max_time_difference = DEFAULT_MAXIMUM_TIME_DELTA
-    if len(sys.argv) > (len(input_filenames) + 1):
-        max_time_difference = float(sys.argv[5])
+    prev_positions_filename = filenames[2]
+    next_positions_filename = filenames[3]
 
     # Extract date strings from the input filenames and validate them
     input_date_strings = [''] * len(input_filenames)
     for i in range(len(input_filenames)):
-        filename = sys.argv[i + 1]
+        filename = filenames[i]
         input_date_strings[i] = read_iso8601_date_string(filename)
         if is_valid_iso8601_date(input_date_strings[i]):
             log.info('%s: %s', input_filenames[i], filename)
         else:
             log.error('%s: %s, invalid date: %s',
                       input_filenames[i], filename, input_date_strings[i])
-            sys.exit(2)
+            return errno.EINVAL
 
     # Ensure that all files are for the correct dates
     if (input_date_strings[0] != input_date_strings[2]) \
@@ -114,7 +105,7 @@ if __name__ == '__main__':
                   "next Positions date: %s",
                   input_date_strings[0], input_date_strings[1],
                   input_date_strings[2], input_date_strings[3])
-        sys.exit(2)
+        return errno.EINVAL
 
     next_days_date = input_date_strings[1]
 
@@ -134,7 +125,7 @@ if __name__ == '__main__':
                                                'PERIOD_START', 'PERIOD_FINISH'])
     except EnvironmentError:
         log.error('could not read file: %s', prev_flights_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('cpr flights read ok')
 
@@ -149,7 +140,7 @@ if __name__ == '__main__':
                                                'PERIOD_START', 'PERIOD_FINISH'])
     except EnvironmentError:
         log.error('could not read file: %s', next_flights_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('adsb flights read ok')
 
@@ -163,7 +154,7 @@ if __name__ == '__main__':
                                               'LAT', 'LON', 'ALT'])
     except EnvironmentError:
         log.error('could not read file: %s', prev_positions_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('prev points read ok')
 
@@ -177,7 +168,7 @@ if __name__ == '__main__':
                                               'LAT', 'LON', 'ALT'])
     except EnvironmentError:
         log.error('could not read file: %s', next_positions_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('next points read ok')
 
@@ -225,8 +216,7 @@ if __name__ == '__main__':
              apt_matches, apt_matches + aa_matches + cs_matches, len(flight_ids))
 
     # Output the previous day ids
-    prev_ids_filename = \
-        create_iso8601_csv_filename('prev_day_matching_ids_', next_days_date)
+    prev_ids_filename = create_matching_ids_filename(PREV_DAY, next_days_date)
     try:
         with open(prev_ids_filename, 'w') as file:
             file.write(NEW_ID_FIELDS)
@@ -234,8 +224,31 @@ if __name__ == '__main__':
                 print(key, value, sep=',', file=file)
     except EnvironmentError:
         log.error('could not write file: %s', prev_ids_filename)
-        sys.exit(2)
+        return errno.EACCES
 
     log.info('written file: %s', prev_ids_filename)
 
     log.info('consecutive day matching complete')
+
+    return 0
+
+
+if __name__ == '__main__':
+
+    filenames_string = '> <'.join(input_filenames)
+    """ A string to inform the user of the required filenames. """
+
+    app_name = os.path.basename(sys.argv[0])
+    if len(sys.argv) <= len(input_filenames):
+        print('Usage: ' + app_name + ' <' + filenames_string + '>'
+              ' [maximum time difference]')
+        sys.exit(errno.EINVAL)
+
+    max_time_difference = DEFAULT_MAXIMUM_TIME_DELTA
+    if len(sys.argv) > (len(input_filenames) + 1):
+        max_time_difference = float(sys.argv[5])
+
+    error_code = match_consecutive_day_trajectories(sys.argv[1:5],
+                                                    max_time_difference)
+    if error_code:
+        sys.exit(error_code)

@@ -2,18 +2,23 @@
 #
 # Copyright (c) 2017-2018 Via Technology Ltd. All Rights Reserved.
 # Consult your license regarding permissions and restrictions.
-#
-# Software to read Eurocontrol ADS-B flights and points files.
+"""
+Software to read Eurocontrol ADS-B flights and points files.
+"""
 
 import sys
 import os
 import bz2
 import csv
+import errno
 from enum import IntEnum, unique
 from pru.trajectory_fields import \
-    FLIGHT_FIELDS, POSITION_FIELDS, iso8601_date_parser, iso8601_datetime_parser, \
-    has_bz2_extension, read_iso8601_date_string, create_iso8601_csv_filename
+    FLIGHT_FIELDS, POSITION_FIELDS, is_valid_iso8601_date, iso8601_datetime_parser, \
+    has_bz2_extension, read_iso8601_date_string
+from pru.trajectory_files import create_convert_fr24_filenames
 from pru.logger import logger
+
+log = logger(__name__)
 
 
 @unique
@@ -45,9 +50,6 @@ class AdsbPointField(IntEnum):
     ON_GROUND = 9
     VERT_SPEED = 10
 
-
-MAX_SSR_CODES = 10
-""" The maximum number of SSR codes to output per flight. """
 
 ICAO_SPECIAL_AIRCRAFT_TYPE_DESIGNATORS = frozenset(['0000',
                                                     'BALL', 'GLID', 'GRND', 'GYRO',
@@ -145,18 +147,12 @@ class AdsbFlight:
             if self.ssr_codes and ('0000' in self.ssr_codes):
                 self.ssr_codes.remove('0000')
 
-            if len(self.ssr_codes) > MAX_SSR_CODES:
-                self.ssr_codes = self.ssr_codes[: MAX_SSR_CODES]
-
     def __repr__(self):
         ssr_code_str = ''
         if self.ssr_codes:
-            for i, ssr_code in enumerate(self.ssr_codes):
-                ssr_code_str += ssr_code + ' '
+            ssr_code_str = ' '.join(self.ssr_codes)
 
-            ssr_code_str = ssr_code_str[: -1]
-
-        return '{},{},{},{},{},{},{},\'{}\',{}Z,{}Z'. \
+        return '{},{},{},{},{},{},{},\'{}\',{}Z,{}Z,[]'. \
             format(self.id, self.callsign, self.registration, self.aircraft_type,
                    self.aircraft_address,
                    self.departure, self.destination, ssr_code_str,
@@ -164,47 +160,38 @@ class AdsbFlight:
                    self.positions[-1].date_time.isoformat())
 
 
-if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print('Usage: convert_fr24_data py <flights_filename> <points_filename>')
-        sys.exit(2)
+def convert_fr24_data(filenames):
 
-    log = logger(os.path.basename(sys.argv[0]))
-
-    flights_filename = sys.argv[1]
-    points_filename = sys.argv[2]
+    flights_filename = filenames[0]
+    points_filename = filenames[1]
 
     if flights_filename == points_filename:
         log.error('Files are the same! Flights filename: %s, points filename: %s',
                   flights_filename, points_filename)
-        sys.exit(2)
+        return errno.EINVAL
 
     # Extract the date string from the filename and validate it
     flights_date = read_iso8601_date_string(flights_filename)
-    try:
-        iso8601_date_parser(flights_date)
-    except ValueError:
+    if is_valid_iso8601_date(flights_date):
+        log.info('fr24 flights file: %s', flights_filename)
+    else:
         log.error('fr24 flights file: %s, invalid date: %s',
                   flights_filename, flights_date)
-        sys.exit(2)
-
-    log.info('fr24 flights file: %s', flights_filename)
+        return errno.EINVAL
 
     # Extract the date string from the filename and validate it
     points_date = read_iso8601_date_string(points_filename)
-    try:
-        iso8601_date_parser(points_date)
-    except ValueError:
+    if is_valid_iso8601_date(points_date):
+        log.info('fr24 points file: %s', points_filename)
+    else:
         log.error('fr24 points file: %s, invalid date: %s',
                   points_filename, points_date)
-        sys.exit(2)
-
-    log.info('fr24 points file: %s', points_filename)
+        return errno.EINVAL
 
     if flights_date != points_date:
         log.error('Files are not for the same date! Flights date: %s, points date: %s',
                   flights_date, points_date)
-        sys.exit(2)
+        return errno.EINVAL
 
     # A dict to hold the ADS-B flights
     flights = {}
@@ -222,7 +209,7 @@ if __name__ == '__main__':
 
     except EnvironmentError:
         log.error('could not read file: %s', flights_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('fr24 flights read ok')
 
@@ -239,7 +226,7 @@ if __name__ == '__main__':
 
     except EnvironmentError:
         log.error('could not read file: %s', points_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('fr24 points read ok')
 
@@ -251,7 +238,8 @@ if __name__ == '__main__':
     valid_flights = 0
 
     # Output the ADS-B flight data for all flights
-    flight_file = create_iso8601_csv_filename('iata_fr24_flights_', flights_date)
+    output_files = create_convert_fr24_filenames(flights_date)
+    flight_file = output_files[0]
     try:
         with open(flight_file, 'w') as file:
             file.write(FLIGHT_FIELDS)
@@ -260,13 +248,13 @@ if __name__ == '__main__':
                     print(values, file=file)
                     valid_flights += 1
 
+        log.info('written file: %s', flight_file)
+
     except EnvironmentError:
         log.error('could not write file: %s', flight_file)
 
-    log.info('written file: %s', flight_file)
-
     # Output the ADS-B position data for all flights
-    positions_file = create_iso8601_csv_filename('fr24_positions_', points_date)
+    positions_file = output_files[1]
     try:
         with open(positions_file, 'w') as file:
             file.write(POSITION_FIELDS)
@@ -275,11 +263,23 @@ if __name__ == '__main__':
                     for pos in values.positions:
                         print(pos, file=file)
 
+        log.info('written file: %s', positions_file)
+
     except EnvironmentError:
         log.error('could not write file: %s', positions_file)
-        sys.exit(2)
-
-    log.info('written file: %s', positions_file)
+        return errno.EACCES
 
     log.info('fr24 conversion complete for %s flights on %s',
              valid_flights, points_date)
+
+    return 0
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 3:
+        print('Usage: convert_fr24_data py <flights_filename> <points_filename>')
+        sys.exit(errno.EINVAL)
+
+    error_code = convert_fr24_data(sys.argv[1:])
+    if error_code:
+        sys.exit(error_code)

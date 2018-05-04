@@ -7,7 +7,7 @@ See: Eurocontrol PRU Trajectories Production Data Merging Report, section 2.
 """
 
 from enum import IntEnum, unique
-from datetime import datetime
+from datetime import datetime, timedelta
 
 FLIGHT_FIELDS = "FLIGHT_ID,CALLSIGN,AIRCRAFT_REG,AIRCRAFT_TYPE,AIRCRAFT_ADDRESS," \
     "ADEP,ADES,SSR_CODES,PERIOD_START,PERIOD_FINISH,SOURCE_IDS\n"
@@ -24,11 +24,18 @@ FLIGHT_EVENT_FIELDS = "FLIGHT_ID,EVENT_TYPE,TIME_SOURCE,TIME_CALCULATED\n"
 POSITION_ERROR_FIELDS = 'FLIGHT_ID,TOTAL,DUPLICATES,ADDRESSES,DISTANCE,ALTITUDE\n'
 """ The fields of a positions error record. """
 
-POSITION_METRICS_FIELDS = 'FLIGHT_ID,PERIOD,UNORDERED,PROFILE_TYPE,RMS_XTE,TIME_SD,RMS_ALT\n'
+POSITION_METRICS_FIELDS = "FLIGHT_ID,PROFILE_TYPE,AV_PERIOD,IS_UNORDERED," \
+    "TIME_SD,TIME_MAX,XT_SD,XT_MAX,ALT_SD,ALT_MAX\n"
 """ The fields of a positions metrics record. """
 
 NEW_ID_FIELDS = 'FLIGHT_ID,NEW_FLIGHT_ID\n'
 """ The fields of a new flight ids record. """
+
+AIRSPACE_INTERSECTION_FIELDS = 'FLIGHT_ID,SECTOR_ID,IS_EXIT,LAT,LON,ALT,TIME'
+""" The fields of an airspace intersections record. """
+
+AIRPORT_INTERSECTION_FIELDS = 'FLIGHT_ID,AIRPORT_ID,RADIUS,IS_DESTINATION,LAT,LON,ALT,TIME'
+""" The fields of an airspace intersections record. """
 
 CSV_FILE_EXTENSION = '.csv'
 """ The file extension of a comma separated variables (csv) file. """
@@ -75,6 +82,38 @@ def dms2decimal(degrees, minutes, seconds, negative=False):
 def iso8601_date_parser(d):
     """ Parse an ISO 8601 date into python datetime format. """
     return datetime.strptime(d, ISO8601_DATE_FORMAT)
+
+
+def iso8601_previous_day(datestring):
+    """ Return the date string of the previous day of a ISO 8601 date string. """
+    date = iso8601_date_parser(datestring)
+    prev_date = date - timedelta(1)
+    return prev_date.strftime(ISO8601_DATE_FORMAT)
+
+
+def compact_date(date):
+    """
+    Converts an ISO 8601 format date string into a compact date.
+
+    Parameters
+    ----------
+    Date: a string date in iso format.
+
+    Returns
+    ----------
+    A string date without hyphens.
+
+    """
+    return date.replace('-', '')
+
+
+def split_dual_date(file_name):
+    """
+      Given a file name like A_2017-08-01_2017-09-01.csv.bz2
+      or B_2017-08-01_2017-09-01.csv returns the from and until dates
+      as a tuple
+    """
+    return (file_name.split("_")[-2], [sym.split(".") for sym in file_name.split("_")][-1][0])
 
 
 def is_valid_iso8601_date(d):

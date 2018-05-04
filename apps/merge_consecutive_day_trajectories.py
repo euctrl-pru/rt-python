@@ -9,13 +9,18 @@ Merges merged flights, positions and events data on consecutive days.
 import sys
 import os
 import gc
+import errno
 import pandas as pd
 from uuid import UUID
 from pru.trajectory_fields import \
     is_valid_iso8601_date, ISO8601_DATETIME_FORMAT, \
-    has_bz2_extension, read_iso8601_date_string
+    has_bz2_extension, BZ2_FILE_EXTENSION, read_iso8601_date_string
 from pru.trajectory_merging import replace_old_flight_ids
 from pru.logger import logger
+
+log = logger(__name__)
+
+BZ2_LENGTH = len(BZ2_FILE_EXTENSION)
 
 
 def get_next_day_items(next_filename, ids_df, log, *, date_fields=[],
@@ -37,10 +42,12 @@ def get_next_day_items(next_filename, ids_df, log, *, date_fields=[],
     try:
         if date_fields:
             next_df = pd.read_csv(next_filename, parse_dates=date_fields,
-                                  converters={'FLIGHT_ID': lambda x: UUID(x)})
+                                  converters={'FLIGHT_ID': lambda x: UUID(x)},
+                                  memory_map=True)
         else:
             next_df = pd.read_csv(next_filename,
-                                  converters={'FLIGHT_ID': lambda x: UUID(x)})
+                                  converters={'FLIGHT_ID': lambda x: UUID(x)},
+                                  memory_map=True)
         log.info('%s read ok', next_filename)
     except EnvironmentError:
         log.error('could not read file: %s', next_filename)
@@ -55,12 +62,10 @@ def get_next_day_items(next_filename, ids_df, log, *, date_fields=[],
         try:
             is_bz2 = has_bz2_extension(next_filename)
             if is_bz2:
-                new_next_df.to_csv(new_next_filename, index=False,
-                                   compression='bz2',
-                                   date_format=ISO8601_DATETIME_FORMAT)
-            else:
-                new_next_df.to_csv(new_next_filename, index=False,
-                                   date_format=ISO8601_DATETIME_FORMAT)
+                new_next_filename = new_next_filename[:-BZ2_LENGTH]
+
+            new_next_df.to_csv(new_next_filename, index=False,
+                               date_format=ISO8601_DATETIME_FORMAT)
             log.info('written file: %s', new_next_filename)
         except EnvironmentError:
             log.error('could not write file: %s', new_next_filename)
@@ -112,7 +117,8 @@ def merge_flights(prev_flights_filename, next_flights_filename, ids_df, log):
     try:
         prev_flights_df = pd.read_csv(prev_flights_filename,
                                       index_col='FLIGHT_ID',
-                                      converters={'FLIGHT_ID': lambda x: UUID(x)})
+                                      converters={'FLIGHT_ID': lambda x: UUID(x)},
+                                      memory_map=True)
         log.info('%s read ok', prev_flights_filename)
     except EnvironmentError:
         log.error('could not read file: %s', prev_flights_filename)
@@ -126,12 +132,10 @@ def merge_flights(prev_flights_filename, next_flights_filename, ids_df, log):
     try:
         is_bz2 = has_bz2_extension(prev_flights_filename)
         if is_bz2:
-            prev_flights_df.to_csv(new_prev_flights_filename, index=True,
-                                   compression='bz2',
-                                   date_format=ISO8601_DATETIME_FORMAT)
-        else:
-            prev_flights_df.to_csv(new_prev_flights_filename, index=True,
-                                   date_format=ISO8601_DATETIME_FORMAT)
+            new_prev_flights_filename = new_prev_flights_filename[:-BZ2_LENGTH]
+
+        prev_flights_df.to_csv(new_prev_flights_filename, index=True,
+                               date_format=ISO8601_DATETIME_FORMAT)
         log.info('written file: %s', new_prev_flights_filename)
     except EnvironmentError:
         log.error('could not write file: %s', new_prev_flights_filename)
@@ -159,7 +163,8 @@ def merge_next_day_items(prev_filename, next_filename, ids_df, log):
     prev_df = pd.DataFrame()
     try:
         prev_df = pd.read_csv(prev_filename, parse_dates=['TIME_SOURCE'],
-                              converters={'FLIGHT_ID': lambda x: UUID(x)})
+                              converters={'FLIGHT_ID': lambda x: UUID(x)},
+                              memory_map=True)
         log.info('%s read ok', prev_filename)
     except EnvironmentError:
         log.error('could not read file: %s', prev_filename)
@@ -174,12 +179,10 @@ def merge_next_day_items(prev_filename, next_filename, ids_df, log):
     try:
         is_bz2 = has_bz2_extension(prev_filename)
         if is_bz2:
-            new_prev_df.to_csv(new_prev_filename, index=False,
-                               compression='bz2',
-                               date_format=ISO8601_DATETIME_FORMAT)
-        else:
-            new_prev_df.to_csv(new_prev_filename, index=False,
-                               date_format=ISO8601_DATETIME_FORMAT)
+            new_prev_filename = new_prev_filename[:-BZ2_LENGTH]
+
+        new_prev_df.to_csv(new_prev_filename, index=False,
+                           date_format=ISO8601_DATETIME_FORMAT)
         log.info('written file: %s', new_prev_filename)
     except EnvironmentError:
         log.error('could not write file: %s', new_prev_filename)
@@ -189,50 +192,40 @@ def merge_next_day_items(prev_filename, next_filename, ids_df, log):
 
 
 ################################################################################
+input_filenames = ['daily ids file',
+                   'prev flights file',
+                   'next flights file',
+                   'prev positions file',
+                   'next positions file',
+                   'prev events file',
+                   'next events file', ]
+""" The filenames required by the application. """
 
-if __name__ == '__main__':
 
-    input_filenames = ['daily ids file',
-                       'prev flights file',
-                       'next flights file',
-                       'prev positions file',
-                       'next positions file',
-                       'prev events file',
-                       'next events file', ]
-    """ The filenames required by the application. """
+def merge_consecutive_day_trajectories(filenames):
 
-    filenames_string = '> <'.join(input_filenames)
-    """ A string to inform the user of the required filenames. """
+    day_ids_filename = filenames[0]
 
-    app_name = os.path.basename(sys.argv[0])
-    if len(sys.argv) <= len(input_filenames):
-        print('Usage: ' + app_name + ' <' + filenames_string + '>')
-        sys.exit(2)
+    prev_flights_filename = filenames[1]
+    next_flights_filename = filenames[2]
 
-    log = logger(app_name)
+    prev_positions_filename = filenames[3]
+    next_positions_filename = filenames[4]
 
-    day_ids_filename = sys.argv[1]
-
-    prev_flights_filename = sys.argv[2]
-    next_flights_filename = sys.argv[3]
-
-    prev_positions_filename = sys.argv[4]
-    next_positions_filename = sys.argv[5]
-
-    prev_events_filename = sys.argv[6]
-    next_events_filename = sys.argv[7]
+    prev_events_filename = filenames[5]
+    next_events_filename = filenames[6]
 
     # Extract date strings from the input filenames and validate them
     input_date_strings = [''] * len(input_filenames)
     for i in range(len(input_filenames)):
-        filename = sys.argv[i + 1]
+        filename = filenames[i]
         input_date_strings[i] = read_iso8601_date_string(filename)
         if is_valid_iso8601_date(input_date_strings[i]):
             log.info('%s: %s', input_filenames[i], filename)
         else:
             log.error('%s: %s, invalid date: %s',
                       input_filenames[i], filename, input_date_strings[i])
-            sys.exit(2)
+            return errno.EINVAL
 
     prev_date = input_date_strings[1]
     next_date = input_date_strings[2]
@@ -248,7 +241,7 @@ if __name__ == '__main__':
                   input_date_strings[2], input_date_strings[3],
                   input_date_strings[4], input_date_strings[5],
                   input_date_strings[6])
-        sys.exit(2)
+        return errno.EINVAL
 
     ############################################################################
 
@@ -257,14 +250,15 @@ if __name__ == '__main__':
     try:
         ids_df = pd.read_csv(day_ids_filename, index_col='FLIGHT_ID',
                              converters={'FLIGHT_ID': lambda x: UUID(x),
-                                         'NEW_FLIGHT_ID': lambda x: UUID(x)})
+                                         'NEW_FLIGHT_ID': lambda x: UUID(x)},
+                             memory_map=True)
     except EnvironmentError:
         log.error('could not read file: %s', day_ids_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     # Merge flights
     if not merge_flights(prev_flights_filename, next_flights_filename, ids_df, log):
-        sys.exit(2)
+        return errno.ENOENT
 
     # free memory used by merge_flights
     gc.collect()
@@ -272,7 +266,7 @@ if __name__ == '__main__':
     # Merge positions
     if not merge_next_day_items(prev_positions_filename, next_positions_filename,
                                 ids_df, log):
-        sys.exit(2)
+        return errno.ENOENT
 
     # free memory used by merge_next_day_items
     gc.collect()
@@ -280,6 +274,23 @@ if __name__ == '__main__':
     # Merge events
     if not merge_next_day_items(prev_events_filename, next_events_filename,
                                 ids_df, log):
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('merging complete')
+
+    return 0
+
+
+if __name__ == '__main__':
+
+    filenames_string = '> <'.join(input_filenames)
+    """ A string to inform the user of the required filenames. """
+
+    app_name = os.path.basename(sys.argv[0])
+    if len(sys.argv) <= len(input_filenames):
+        print('Usage: ' + app_name + ' <' + filenames_string + '>')
+        sys.exit(errno.EINVAL)
+
+    error_code = merge_consecutive_day_trajectories(sys.argv[1:])
+    if error_code:
+        sys.exit(error_code)

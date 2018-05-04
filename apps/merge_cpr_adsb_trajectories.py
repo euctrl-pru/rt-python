@@ -8,14 +8,18 @@ Merges CPR and ADS-B flights and positions data.
 
 import sys
 import os
+import errno
 import pandas as pd
 from uuid import UUID
 from pru.trajectory_fields import \
     is_valid_iso8601_date, ISO8601_DATETIME_FORMAT, \
     read_iso8601_date_string, create_iso8601_csv_filename
+from pru.trajectory_files import create_merge_cpr_adsb_output_filenames
 from pru.trajectory_merging import \
     read_dataframe_with_new_ids, replace_old_flight_ids
 from pru.logger import logger
+
+log = logger(__name__)
 
 
 def get_flights_with_new_ids(flights_filename, ids_df):
@@ -101,50 +105,41 @@ def update_flight_data(flights_df, positions_df):
             flights_df.at[flight_id, 'PERIOD_FINISH'] = finish_time
 
 
-if __name__ == '__main__':
+input_filenames = ['cpr ids file',
+                   'adsb ids file',
+                   'cpr flights file',
+                   'adsb flights file',
+                   'cpr positions file',
+                   'adsb positions file',
+                   'cpr events file']
+""" The filenames required by the application. """
 
-    input_filenames = ['cpr ids file',
-                       'adsb ids file',
-                       'cpr flights file',
-                       'adsb flights file',
-                       'cpr positions file',
-                       'adsb positions file',
-                       'cpr events file']
-    """ The filenames required by the application. """
 
-    filenames_string = '> <'.join(input_filenames)
-    """ A string to inform the user of the required filenames. """
+def merge_cpr_adsb_trajectories(filenames):
 
-    app_name = os.path.basename(sys.argv[0])
-    if len(sys.argv) <= len(input_filenames):
-        print('Usage: ' + app_name + ' <' + filenames_string + '>')
-        sys.exit(2)
+    cpr_ids_filename = filenames[0]
+    adsb_ids_filename = filenames[1]
 
-    log = logger(app_name)
-
-    cpr_ids_filename = sys.argv[1]
-    adsb_ids_filename = sys.argv[2]
-
-    cpr_flights_filename = sys.argv[3]
-    adsb_flights_filename = sys.argv[4]
+    cpr_flights_filename = filenames[2]
+    adsb_flights_filename = filenames[3]
 
     # Note positions files must be clean
-    cpr_positions_filename = sys.argv[5]
-    adsb_positions_filename = sys.argv[6]
+    cpr_positions_filename = filenames[4]
+    adsb_positions_filename = filenames[5]
 
-    cpr_events_filename = sys.argv[7]
+    cpr_events_filename = filenames[6]
 
     # Extract date strings from the input filenames and validate them
     input_date_strings = [''] * len(input_filenames)
     for i in range(len(input_filenames)):
-        filename = sys.argv[i + 1]
+        filename = filenames[i]
         input_date_strings[i] = read_iso8601_date_string(filename)
         if is_valid_iso8601_date(input_date_strings[i]):
             log.info('%s: %s', input_filenames[i], filename)
         else:
             log.error('%s: %s, invalid date: %s',
                       input_filenames[i], filename, input_date_strings[i])
-            sys.exit(2)
+            return errno.EINVAL
 
     # Ensure that all files are for the same date
     if input_date_strings[1:] != input_date_strings[:-1]:
@@ -153,7 +148,7 @@ if __name__ == '__main__':
                   input_date_strings[2], input_date_strings[3],
                   input_date_strings[4], input_date_strings[5],
                   input_date_strings[6])
-        sys.exit(2)
+        return errno.EINVAL
 
     ############################################################################
     # Read the files
@@ -162,20 +157,22 @@ if __name__ == '__main__':
     cpr_ids_df = pd.DataFrame()
     try:
         cpr_ids_df = pd.read_csv(cpr_ids_filename, index_col='FLIGHT_ID',
-                                 converters={'NEW_FLIGHT_ID': lambda x: UUID(x)})
+                                 converters={'NEW_FLIGHT_ID': lambda x: UUID(x)},
+                                 memory_map=True)
         cpr_ids_df.sort_index(inplace=True)
     except EnvironmentError:
         log.error('could not read file: %s', cpr_ids_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     adsb_ids_df = pd.DataFrame()
     try:
         adsb_ids_df = pd.read_csv(adsb_ids_filename, index_col='FLIGHT_ID',
-                                  converters={'NEW_FLIGHT_ID': lambda x: UUID(x)})
+                                  converters={'NEW_FLIGHT_ID': lambda x: UUID(x)},
+                                  memory_map=True)
         cpr_ids_df.sort_index(inplace=True)
     except EnvironmentError:
         log.error('could not read file: %s', adsb_ids_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('read ids files: %s,%s', cpr_ids_filename, adsb_ids_filename)
 
@@ -188,7 +185,7 @@ if __name__ == '__main__':
     except EnvironmentError:
         log.error('could not read file: %s or %s',
                   cpr_flights_filename, adsb_flights_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('read and merged flights files: %s,%s',
              cpr_flights_filename, adsb_flights_filename)
@@ -202,7 +199,7 @@ if __name__ == '__main__':
     except EnvironmentError:
         log.error('could not read file: %s or %s',
                   cpr_positions_filename, adsb_positions_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     # Read and merge the positions
     log.info('read and merged positions files: %s,%s',
@@ -215,7 +212,7 @@ if __name__ == '__main__':
         replace_old_flight_ids(events_df)
     except EnvironmentError:
         log.error('could not read file:  %s', cpr_events_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     # Read and merge the positions
     log.info('read and merged events file: %s', cpr_events_filename)
@@ -223,40 +220,55 @@ if __name__ == '__main__':
     update_flight_data(flights_df, positions_df)
 
     # Output the flights
-    output_flights_filename = \
-        create_iso8601_csv_filename('cpr_fr24_flights_', input_date_strings[0], is_bz2=True)
+    output_files = create_merge_cpr_adsb_output_filenames(input_date_strings[0])
+    output_flights_filename = output_files[0]
     try:
-        flights_df.to_csv(output_flights_filename, index=False, compression='bz2',
+        flights_df.to_csv(output_flights_filename, index=False,
                           date_format=ISO8601_DATETIME_FORMAT)
     except EnvironmentError:
         log.error('could not write file: %s', output_flights_filename)
-        sys.exit(2)
+        return errno.EACCES
 
     log.info('written file: %s', output_flights_filename)
 
     # Convert the positions prior to output
     replace_old_flight_ids(positions_df)
-    output_positions_filename = \
-        create_iso8601_csv_filename('cpr_fr24_positions_', input_date_strings[0], is_bz2=True)
+    output_positions_filename = output_files[1]
     try:
-        positions_df.to_csv(output_positions_filename, index=False, compression='bz2',
+        positions_df.to_csv(output_positions_filename, index=False,
                             date_format=ISO8601_DATETIME_FORMAT)
     except EnvironmentError:
         log.error('could not write file: %s', output_positions_filename)
-        sys.exit(2)
+        return errno.EACCES
 
     log.info('written file: %s', output_positions_filename)
 
     # Output the events
-    output_events_filename = \
-        create_iso8601_csv_filename('cpr_fr24_events_', input_date_strings[0])
+    output_events_filename = output_files[2]
     try:
         events_df.to_csv(output_events_filename, index=False,
                          date_format=ISO8601_DATETIME_FORMAT)
     except EnvironmentError:
         log.error('could not write file: %s', output_events_filename)
-        sys.exit(2)
+        return errno.EACCES
 
     log.info('written file: %s', output_events_filename)
 
     log.info('merging complete')
+
+    return 0
+
+
+if __name__ == '__main__':
+
+    filenames_string = '> <'.join(input_filenames)
+    """ A string to inform the user of the required filenames. """
+
+    app_name = os.path.basename(sys.argv[0])
+    if len(sys.argv) <= len(input_filenames):
+        print('Usage: ' + app_name + ' <' + filenames_string + '>')
+        sys.exit(errno.EINVAL)
+
+    error_code = merge_cpr_adsb_trajectories(sys.argv[1:])
+    if error_code:
+        sys.exit(error_code)

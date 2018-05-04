@@ -9,57 +9,54 @@ Convert IATA airport codes in FR24 ADS-B files to ICAO airport codes.
 
 import sys
 import os
+import errno
 import pandas as pd
-from pru.trajectory_fields import has_bz2_extension
+from pru.trajectory_fields import is_valid_iso8601_date, read_iso8601_date_string
+from pru.trajectory_files import create_flights_filename, FR24, IATA
 from pru.logger import logger
 
-IATA_STRING = 'iata_'
-""" The string at the start of flight files with IATA airport codes. """
+log = logger(__name__)
 
 DEFAULT_AIRPORTS_FILENAME = 'airports.csv'
 """ The default name of the file containing airport codes. """
-if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print('Usage: convert_airport_ids.py <fr24_flights_filename> [airports_filename]')
-        sys.exit(2)
 
-    log = logger(os.path.basename(sys.argv[0]))
 
-    flights_filename = sys.argv[1]
-    is_bz2 = has_bz2_extension(flights_filename)
+def convert_airport_ids(flights_filename,
+                        airports_filename=DEFAULT_AIRPORTS_FILENAME):
 
     # Validate the filename
-    filename_start = os.path.basename(flights_filename)[:5]
-    if filename_start != IATA_STRING:
+    filename_start = os.path.basename(flights_filename)[:len(IATA)]
+    if filename_start != IATA:
         log.error('File is not an iata_ flights file: %s', flights_filename)
-        sys.exit(2)
+        return errno.EINVAL
 
-    log.info('fr24 file: %s', flights_filename)
+    # Extract the date string from the filename and validate it
+    flights_date = read_iso8601_date_string(flights_filename)
+    if not is_valid_iso8601_date(flights_date):
+        log.error('iata fr24 flights file: %s, invalid date: %s',
+                  flights_filename, flights_date)
+        return errno.EINVAL
 
-    # Get the airports_filename, override the default if necesary
-    airports_filename = DEFAULT_AIRPORTS_FILENAME
-    if len(sys.argv) >= 3:
-        airports_filename = sys.argv[2]
-
+    log.info('iata fr24 file: %s', flights_filename)
     log.info('airports file: %s', airports_filename)
 
     # Read the flights into a pandas DataFrame
     flights_df = pd.DataFrame()
     try:
-        flights_df = pd.read_csv(flights_filename)
+        flights_df = pd.read_csv(flights_filename, memory_map=True)
     except EnvironmentError:
         log.error('could not read file: %s', flights_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('flights file read ok')
 
     # Read the airports into a pandas DataFrame
     airports_df = pd.DataFrame()
     try:
-        airports_df = pd.read_csv(airports_filename)
+        airports_df = pd.read_csv(airports_filename, memory_map=True)
     except EnvironmentError:
         log.error('could not read file: %s', airports_filename)
-        sys.exit(2)
+        return errno.ENOENT
 
     log.info('airports file read ok')
 
@@ -72,18 +69,32 @@ if __name__ == '__main__':
 
     log.info('airport ids converted')
 
-    # strip IATA_STRING from the start of the output filename
-    output_filename = flights_filename[5:]
+    output_filename = create_flights_filename(FR24, flights_date)
     try:
-        # Ensure output file is in same format as input file
-        if is_bz2:
-            flights_df.to_csv(output_filename, index=False, compression='bz2')
-        else:
-            flights_df.to_csv(output_filename, index=False)
+        flights_df.to_csv(output_filename, index=False)
+
+        log.info('written file: %s', output_filename)
     except EnvironmentError:
         log.error('could not write file: %s', output_filename)
-        sys.exit(2)
-
-    log.info('written file: %s', output_filename)
+        return errno.EACCES
 
     log.info('airports conversion complete')
+
+    return 0
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print('Usage: convert_airport_ids.py <fr24_flights_filename> [airports_filename]')
+        sys.exit(errno.EINVAL)
+
+    flights_filename = sys.argv[1]
+
+    # Get the airports_filename, override the default if necesary
+    airports_filename = DEFAULT_AIRPORTS_FILENAME
+    if len(sys.argv) >= 3:
+        airports_filename = sys.argv[2]
+
+    error_code = convert_airport_ids(flights_filename, airports_filename)
+    if error_code:
+        sys.exit(error_code)
