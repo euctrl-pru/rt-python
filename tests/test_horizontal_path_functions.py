@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 from numpy.testing import assert_almost_equal, assert_array_almost_equal
 from os import environ as env
+from pru.EcefPoint import rad2nm
+from pru.TurnArc import TurnArc
 from pru.ecef_functions import *
 from pru.horizontal_path_functions import *
 
@@ -26,7 +28,7 @@ class TestHorizontlPathFunctions(unittest.TestCase):
     def test_find_extreme_point_index_1(self):
         # A line of Lat Longs around the Equator
         LATITUDES = np.zeros(10, dtype=float)
-        LONGITUDES = np.array(range(-5, 4), dtype=float)
+        LONGITUDES = np.array(range(-5, 5), dtype=float)
         ecef_points_0 = calculate_EcefPoints(LATITUDES, LONGITUDES)
 
         # same point
@@ -215,6 +217,87 @@ class TestHorizontlPathFunctions(unittest.TestCase):
         result_3 = calculate_max_turn_initiation_distance(np.deg2rad(2.0 / 3.0),
                                                           TWO_NM)
         self.assertEqual(result_3, TWO_NM / 2)
+
+    def test_calculate_turn_initiation_distance_90(self):
+        # A 90 degree turn at the Equator
+        LATS = np.array([0.0, 0.0, 1.0])
+        LONS = np.array([1.0, 0.0, 0.0])
+        ecef_points = calculate_EcefPoints(LATS, LONS)
+
+        prev_arc = EcefArc(ecef_points[0], ecef_points[1])
+        arc = EcefArc(ecef_points[1], ecef_points[2])
+        TEN_NM = TWENTY_NM / 2
+        turn_0 = TurnArc(prev_arc, arc, TEN_NM)
+        turn_angle_0 = turn_0.angle
+
+        distance_start = calculate_turn_initiation_distance(prev_arc, arc, turn_0.start,
+                                                            TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(distance_start, TEN_NM)
+
+        distance_finish = calculate_turn_initiation_distance(prev_arc, arc, turn_0.finish,
+                                                             TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(distance_finish, TEN_NM)
+
+        point_1 = turn_0.position(turn_angle_0 / 2)
+        distance_1 = calculate_turn_initiation_distance(prev_arc, arc, point_1,
+                                                        TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(distance_1, TEN_NM)
+
+        point_2 = turn_0.position(turn_angle_0 / 4)
+        distance_2 = calculate_turn_initiation_distance(prev_arc, arc, point_2,
+                                                        TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(distance_2, TEN_NM)
+
+        point_3 = turn_0.position(3 * turn_angle_0 / 4)
+        distance_3 = calculate_turn_initiation_distance(prev_arc, arc, point_3,
+                                                        TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(distance_3, TEN_NM)
+
+        # Test with a point further than TWENTY_NM from the intersection
+        turn_30 = TurnArc(prev_arc, arc, TWENTY_NM + TEN_NM)
+        distance_4 = calculate_turn_initiation_distance(prev_arc, arc, turn_30.start,
+                                                        TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        self.assertEqual(distance_4, TWENTY_NM)
+
+        point_30 = turn_30.position(3 * turn_angle_0 / 4)
+        distance_30 = calculate_turn_initiation_distance(prev_arc, arc, point_30,
+                                                         TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        self.assertEqual(distance_30, TWENTY_NM)
+
+    def test_calculate_turn_initiation_distance_20(self):
+        # A shallow turn at the Equator
+        LATS = np.array([0.0, 0.0, 0.2])
+        LONS = np.array([-1.0, 0.0, 1.0])
+        ecef_points = calculate_EcefPoints(LATS, LONS)
+
+        prev_arc = EcefArc(ecef_points[0], ecef_points[1])
+        arc = EcefArc(ecef_points[1], ecef_points[2])
+        TEN_NM = TWENTY_NM / 2
+        turn_0 = TurnArc(prev_arc, arc, TEN_NM)
+        turn_angle_0 = turn_0.angle
+
+        distance_start = calculate_turn_initiation_distance(prev_arc, arc, turn_0.start,
+                                                            TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(distance_start, TEN_NM)
+
+        distance_finish = calculate_turn_initiation_distance(prev_arc, arc, turn_0.finish,
+                                                             TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(distance_finish, TEN_NM)
+
+        point_1 = turn_0.position(turn_angle_0 / 2)
+        distance_1 = calculate_turn_initiation_distance(prev_arc, arc, point_1,
+                                                        TWENTY_NM, ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(distance_1, TEN_NM, decimal=6)
+
+        point_2 = turn_0.position(turn_angle_0 / 4)
+        distance_2 = calculate_turn_initiation_distance(prev_arc, arc, point_2,
+                                                        TWENTY_NM, ACROSS_TRACK_TOLERANCE / 4)
+        assert_almost_equal(distance_2, TEN_NM, decimal=6)
+
+        point_3 = turn_0.position(3 * turn_angle_0 / 4)
+        distance_3 = calculate_turn_initiation_distance(prev_arc, arc, point_3,
+                                                        TWENTY_NM, ACROSS_TRACK_TOLERANCE / 4)
+        assert_almost_equal(distance_3, TEN_NM, decimal=5)
 
     def test_derive_horizontal_path(self):
         test_data_home = env.get('TEST_DATA_HOME')

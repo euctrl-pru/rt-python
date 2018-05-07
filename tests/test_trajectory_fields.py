@@ -8,7 +8,7 @@ from numpy.testing import assert_almost_equal
 from pru.trajectory_fields import *
 
 
-class TestConvertADSBFunctions(unittest.TestCase):
+class TestTrajectoryFields(unittest.TestCase):
 
     def test_dms2decimal(self):
         """Test conversion of degrees minutes and seconds."""
@@ -35,6 +35,22 @@ class TestConvertADSBFunctions(unittest.TestCase):
             result2 = iso8601_date_parser(test_date2)
         except ValueError:
             self.assertTrue(True)
+
+    def test_iso8601_previous_day(self):
+        """Test previous ISO8601 date function."""
+
+        test_date1 = '2017-08-01'
+        result1 = iso8601_previous_day(test_date1)
+
+        self.assertEqual(result1, '2017-07-31')
+
+    def test_compact_date(self):
+        """Test conversion of CPR date times."""
+
+        test_date1 = '2017-08-01'
+        result1 = compact_date(test_date1)
+
+        self.assertEqual(result1, '20170801')
 
     def test_is_valid_iso8601_date(self):
         """Test validation of ADS-B date times."""
@@ -95,6 +111,19 @@ class TestConvertADSBFunctions(unittest.TestCase):
         test_filename3 = 'trajectories_2017-08-01.json'
         date3 = read_iso8601_date_string(test_filename3, is_json=True)
         self.assertEqual(date3, '2017-08-01')
+
+    def test_split_dual_date(self):
+        """Test extraction of dual date times."""
+
+        test_name1 = 'A_2017-08-01_2017-09-01.csv.bz2'
+        result1, result2 = split_dual_date(test_name1)
+        self.assertEqual(result1, '2017-08-01')
+        self.assertEqual(result2, '2017-09-01')
+
+        test_name2 = 'FAC_APDS_FLIGHT_IR691_2017-08-01_2017-09-01.csv.bz2'
+        result3, result4 = split_dual_date(test_name1)
+        self.assertEqual(result3, '2017-08-01')
+        self.assertEqual(result4, '2017-09-01')
 
     def test_create_iso8601_csv_filename(self):
 

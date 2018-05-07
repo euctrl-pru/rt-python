@@ -42,6 +42,49 @@ ECEF_ICOSAHEDRON = np.array([[0.0, 0.0, 1.0],
 
 class TestEcefPoint(unittest.TestCase):
 
+    def test_lat_long_to_xyz(self):
+        """Test conversion of Lat Longs to x, y, z coords using Icosahedron verticies."""
+        for i in range(12):
+            lat_long = LAT_LONG_ICOSAHEDRON[i]
+            coords = lat_long_to_xyz(lat_long[0], lat_long[1])
+
+            expected_result = ECEF_ICOSAHEDRON[i]
+            assert_array_almost_equal(coords, expected_result)
+
+        # Test Latitude above North Pole
+        lat_long = [91.0, 0.0]
+        coords = lat_long_to_xyz(lat_long[0], lat_long[1])
+
+        expected_result = ECEF_ICOSAHEDRON[0]
+        assert_array_almost_equal(coords, expected_result)
+
+        # Test Latitude below South Pole
+        lat_long = [-91.0, 0.0]
+        coords = lat_long_to_xyz(lat_long[0], lat_long[1])
+
+        expected_result = ECEF_ICOSAHEDRON[11]
+        assert_array_almost_equal(coords, expected_result)
+
+    def test_distance_radians(self):
+        ecef_point_0 = EcefPoint(ECEF_ICOSAHEDRON[0])
+        self.assertEqual(distance_radians(ecef_point_0, ecef_point_0), 0.0)
+
+        result_1 = np.arctan(2.0)
+        for i in range(1, 6):
+            ecef_point_i = EcefPoint(ECEF_ICOSAHEDRON[i])
+            assert_almost_equal(distance_radians(ecef_point_0, ecef_point_i),
+                                result_1)
+
+        result_2 = np.pi - result_1  # 2.0344439363560154
+        for i in range(6, 11):
+            ecef_point_i = EcefPoint(ECEF_ICOSAHEDRON[i])
+            assert_almost_equal(distance_radians(ecef_point_0, ecef_point_i),
+                                result_2)
+
+        ecef_point_11 = EcefPoint(ECEF_ICOSAHEDRON[11])
+        assert_almost_equal(distance_radians(ecef_point_0, ecef_point_11),
+                            np.pi)
+
     def test_EcefPoint_from_lat_long(self):
         """Test conversion of Lat Longs using Icosahedron verticies."""
         for i in range(12):
@@ -128,19 +171,18 @@ class TestEcefPoint(unittest.TestCase):
 
         ecef_point = EcefPoint([EPSILON, -EPSILON, EPSILON])
         assert_almost_equal(abs(ecef_point), 0.0)
-        self.assertTrue(ecef_point)
 
         ecef_point.normalize()
         assert_almost_equal(abs(ecef_point), 0.0)
-        self.assertFalse(ecef_point)
 
     def test_neg_and_pos(self):
         ecef_point = EcefPoint(ECEF_ICOSAHEDRON[0])
-        self.assertTrue(+ecef_point == ecef_point)
-        self.assertTrue(-ecef_point == EcefPoint(ECEF_ICOSAHEDRON[11]))
+        ecef_point_anti = EcefPoint(ECEF_ICOSAHEDRON[11])
+        assert_array_almost_equal(+ecef_point, ecef_point)
+        assert_array_almost_equal(-ecef_point, ecef_point_anti)
 
-        self.assertFalse(-ecef_point == ecef_point)
-        self.assertFalse(+ecef_point == EcefPoint(ECEF_ICOSAHEDRON[11]))
+        assert_array_almost_equal(+ecef_point_anti, ecef_point_anti)
+        assert_array_almost_equal(-ecef_point_anti, ecef_point)
 
     def test_add_and_sub(self):
         ecef_point1 = EcefPoint(ECEF_ICOSAHEDRON[1])
@@ -151,11 +193,11 @@ class TestEcefPoint(unittest.TestCase):
 
         ecef_point_4 = ecef_point_3 - ecef_point2
         assert_almost_equal(abs(ecef_point_4), 1.0)
-        self.assertTrue(ecef_point_4 == ecef_point1)
+        assert_array_almost_equal(ecef_point_4, ecef_point1)
 
         ecef_point_5 = ecef_point_3 - ecef_point1
         assert_almost_equal(abs(ecef_point_5), 1.0)
-        self.assertTrue(ecef_point_5 == ecef_point2)
+        assert_array_almost_equal(ecef_point_5, ecef_point2)
 
     def test_mul(self):
         ecef_point1 = EcefPoint(ECEF_ICOSAHEDRON[1])
@@ -181,29 +223,29 @@ class TestEcefPoint(unittest.TestCase):
         else:
             self.assertTrue(0)
 
-    def test_distance_radians(self):
+    def test_great_circle_distance(self):
         ecef_point_0 = EcefPoint(ECEF_ICOSAHEDRON[0])
-        self.assertEqual(distance_radians(ecef_point_0, ecef_point_0), 0.0)
+        self.assertEqual(ecef_point_0.great_circle_distance(ecef_point_0), 0.0)
 
         result_1 = np.arctan(2.0)
         for i in range(1, 6):
             ecef_point_i = EcefPoint(ECEF_ICOSAHEDRON[i])
-            assert_almost_equal(distance_radians(ecef_point_0, ecef_point_i),
+            assert_almost_equal(ecef_point_0.great_circle_distance(ecef_point_i),
                                 result_1)
 
         result_2 = np.pi - result_1  # 2.0344439363560154
         for i in range(6, 11):
             ecef_point_i = EcefPoint(ECEF_ICOSAHEDRON[i])
-            assert_almost_equal(distance_radians(ecef_point_0, ecef_point_i),
+            assert_almost_equal(ecef_point_0.great_circle_distance(ecef_point_i),
                                 result_2)
 
         ecef_point_11 = EcefPoint(ECEF_ICOSAHEDRON[11])
-        assert_almost_equal(distance_radians(ecef_point_0, ecef_point_11),
+        assert_almost_equal(ecef_point_0.great_circle_distance(ecef_point_11),
                             np.pi)
 
     def test_distance_nm(self):
         ecef_point_0 = EcefPoint(ECEF_ICOSAHEDRON[0])
-        self.assertEqual(distance_radians(ecef_point_0, ecef_point_0), 0.0)
+        self.assertEqual(distance_nm(ecef_point_0, ecef_point_0), 0.0)
 
         result_1 = 60.0 * np.rad2deg(np.arctan(2.0))
         for i in range(1, 6):

@@ -11,6 +11,31 @@ from pru.trajectory_functions import *
 
 class TestTrajectoryFunctions(unittest.TestCase):
 
+    def test_calculate_delta_time(self):
+        start_time = np.datetime64('2017-08-01 11:15')
+        finish_time = np.datetime64('2017-08-01 11:16')
+        self.assertEqual(calculate_delta_time(start_time, finish_time), 60.0)
+
+    def test_calculate_elapsed_times(self):
+        start_time = np.datetime64('2017-08-01 11:15')
+        finish_time = np.datetime64('2017-08-01 11:15:30')
+        date_times = np.arange(start_time, finish_time, np.timedelta64(5, 's'))
+
+        expected_times = [0, 5, 10, 15, 20, 25]
+        times = calculate_elapsed_times(date_times, date_times[0])
+        self.assertEqual(len(times), len(expected_times))
+        assert_array_almost_equal(times, expected_times)
+
+    def test_calculate_date_times(self):
+        start_time = np.datetime64('2017-08-01 11:15')
+        elapsed_times = np.array([0.0, 5.1, 10.2, 15.3, 20.4, 25.456789])
+        date_times = calculate_date_times(elapsed_times, start_time)
+        self.assertEqual(len(date_times), len(elapsed_times))
+        self.assertEqual(date_times[0], start_time)
+
+        finish_time = np.datetime64('2017-08-01 11:15:25.456789')
+        self.assertEqual(date_times[-1], finish_time)
+
     def test_calculate_leg_durations(self):
         """Test the calculate_leg_durations function."""
         start_time = np.datetime64('2017-08-01 11:15')
@@ -24,6 +49,62 @@ class TestTrajectoryFunctions(unittest.TestCase):
         for i in range(1, len(datetimes)):
             self.assertEqual(durations[i], 5.0)
 
+    def test_calculate_speed(self):
+        speed1 = calculate_speed(1.0, 1.0)
+        assert_almost_equal(speed1, 3600.0)
+
+        speed2 = calculate_speed(1.0, 2.0)
+        assert_almost_equal(speed2, 1800.0)
+
+        speed3 = calculate_speed(1.0, 3.0)
+        assert_almost_equal(speed3, 1200.0)
+
+        speed3 = calculate_speed(1.0, 0.0)
+        assert_almost_equal(speed3, 7200.0)
+
+        speed3 = calculate_speed(1.0, 0.0, min_time=1.0)
+        assert_almost_equal(speed3, 3600.0)
+
+    def test_calculate_min_speed(self):
+        DISTANCE_ACCURACY = 0.25
+        TIME_PRECISION = 1.0
+        speed0 = calculate_min_speed(0.0, 0.0, DISTANCE_ACCURACY, TIME_PRECISION)
+        assert_almost_equal(speed0, -900.0)
+
+        speed025 = calculate_min_speed(DISTANCE_ACCURACY, 0.0,
+                                       DISTANCE_ACCURACY, TIME_PRECISION)
+        assert_almost_equal(speed025, 0.0)
+
+        speed1 = calculate_min_speed(1.0, 1.0, DISTANCE_ACCURACY, TIME_PRECISION)
+        assert_almost_equal(speed1, 1350.0)
+
+        speed2 = calculate_min_speed(1.0, 2.0, DISTANCE_ACCURACY, TIME_PRECISION)
+        assert_almost_equal(speed2, 900.0)
+
+        speed3 = calculate_min_speed(1.0, 3.0, DISTANCE_ACCURACY, TIME_PRECISION)
+        assert_almost_equal(speed3, 675.0)
+
+    def test_find_duplicate_values(self):
+
+        distances = np.array(range(10))
+        dups_0 = find_duplicate_values(distances, 0.25)
+        self.assertFalse(dups_0.any())
+
+        distances[6] = distances[5]
+        dups_1 = find_duplicate_values(distances, 0.25)
+        self.assertTrue(dups_1.any())
+
+    def test_max_delta(self):
+
+        deltas = np.zeros(10, dtype=float)
+        self.assertEqual(max_delta(deltas), 0.0)
+
+        deltas[3] = 1.0
+        self.assertEqual(max_delta(deltas), 1.0)
+
+        deltas[5] = -2.0
+        self.assertEqual(max_delta(deltas), 2.0)
+
     def test_calculate_altitude_differences(self):
         """Test the calculate_altitude_differences function."""
         altitudes = np.array([10000 - 100 * i for i in range(10)],
@@ -35,6 +116,33 @@ class TestTrajectoryFunctions(unittest.TestCase):
         self.assertEqual(delta_alts[0], 0.0)
         for i in range(1, len(delta_alts)):
             self.assertEqual(delta_alts[i], -100.0)
+
+    def test_calculate_vertical_speed(self):
+        speed1 = calculate_vertical_speed(100, 1.0)
+        assert_almost_equal(speed1, 6000.0)
+
+        speed2 = calculate_vertical_speed(100, 2.0)
+        assert_almost_equal(speed2, 3000.0)
+
+        speed3 = calculate_vertical_speed(100, 3.0)
+        assert_almost_equal(speed3, 2000.0)
+
+        speed1 = calculate_vertical_speed(100, 0.0)
+        assert_almost_equal(speed1, 12000.0)
+
+        speed1 = calculate_vertical_speed(100, 0.0, min_time=1.0)
+        assert_almost_equal(speed1, 6000.0)
+
+    def test_convert_angle_to_track_angle(self):
+
+        ANGLES_RADS = np.array([0., np.pi, 2.0 * np.pi,
+                                -np.pi, -0.5 * np.pi, -2.0 * np.pi])
+
+        TRACKS_DEGS = np.array([0., 180., 360.0,
+                                180.0, 270.0, 0.0])
+
+        results = convert_angle_to_track_angle(ANGLES_RADS)
+        assert_array_almost_equal(results, TRACKS_DEGS)
 
     def test_calculate_common_period(self):
         """Test the calculate_common_period function."""

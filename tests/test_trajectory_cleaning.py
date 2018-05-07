@@ -15,23 +15,6 @@ TEST_DATA_HOME = 'TEST_DATA_HOME'
 
 class TestTrajectoryCleaning(unittest.TestCase):
 
-    def test_calculate_min_speed(self):
-        speed0 = calculate_min_speed(0.0, 0.0, DEFAULT_DISTANCE_ACCURACY, DEFAULT_TIME_PRECISION)
-        assert_almost_equal(speed0, -900.0)
-
-        speed025 = calculate_min_speed(DEFAULT_DISTANCE_ACCURACY, 0.0,
-                                       DEFAULT_DISTANCE_ACCURACY, DEFAULT_TIME_PRECISION)
-        assert_almost_equal(speed025, 0.0)
-
-        speed1 = calculate_min_speed(1.0, 1.0, DEFAULT_DISTANCE_ACCURACY, DEFAULT_TIME_PRECISION)
-        assert_almost_equal(speed1, 1350.0)
-
-        speed2 = calculate_min_speed(1.0, 2.0, DEFAULT_DISTANCE_ACCURACY, DEFAULT_TIME_PRECISION)
-        assert_almost_equal(speed2, 900.0)
-
-        speed3 = calculate_min_speed(1.0, 3.0, DEFAULT_DISTANCE_ACCURACY, DEFAULT_TIME_PRECISION)
-        assert_almost_equal(speed3, 675.0)
-
     def test_find_invalid_positions_1(self):
         test_data_home = env.get('TEST_DATA_HOME')
         self.assertTrue(test_data_home)

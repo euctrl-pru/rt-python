@@ -132,17 +132,6 @@ class TestTrajectoryInterpolation(unittest.TestCase):
         assert_almost_equal(vertical_speeds[0], 369.86301369863014)
         assert_almost_equal(vertical_speeds[-1], -6000.0)
 
-    def test_convert_ground_tracks(self):
-
-        ANGLES_RADS = np.array([0., np.pi, 2.0 * np.pi,
-                                -np.pi, -0.5 * np.pi, -2.0 * np.pi])
-
-        TRACKS_DEGS = np.array([0., 180., 360.0,
-                                180.0, 270.0, 0.0])
-
-        results = convert_ground_tracks(ANGLES_RADS)
-        assert_array_almost_equal(results, TRACKS_DEGS)
-
     def test_interpolate_trajectory_positions(self):
         test_data_home = env.get('TEST_DATA_HOME')
         self.assertTrue(test_data_home)
