@@ -488,7 +488,7 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
         raise ValueError('Trajectory only has one point!')
 
     # calculate the position period as seconds per point
-    times = points_df['TIME_SOURCE'].values
+    times = points_df['TIME'].values
     duration = calculate_delta_time(times[0], times[-1])
     position_period = duration / (len(points_df) - 1)
 

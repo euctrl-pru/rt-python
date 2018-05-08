@@ -150,7 +150,7 @@ class CprPosition:
             and (self.aircraft_address == other.aircraft_address)
 
     def __repr__(self):
-        return '{:d},,{}Z,,{:.5f},{:.5f},{:d},{:.1f},{:.5f},{:d},,CPR 0x{:02x} 0x{:02x},{},\'{}\''. \
+        return '{:d},,{}Z,{:.5f},{:.5f},{:d},{:.1f},{:.5f},{:d},,CPR 0x{:02x} 0x{:02x},{},\'{}\''. \
             format(self.id, self.date_time.isoformat(), self.latitude, self.longitude,
                    self.altitude, self.ground_speed, self.track_magnetic, self.vertical_rate,
                    self.sac, self.sic, self.aircraft_address, self.ssr_code)
@@ -197,9 +197,9 @@ class CprFlight:
         addresses = aircraft_addresses.value_counts().index.tolist()
         if addresses:
             self.aircraft_address = addresses[0]
-            # aircraft_address2 lists multiple aircraft_addresses, if any
+            # aircraft_address2 lists first multiple aircraft_addresses, if any
             if len(addresses) > 1:
-                self.aircraft_address2 = addresses[1:]
+                self.aircraft_address2 = [addresses[1]]
 
         # Ignore 0000 squawks
         if self.ssr_codes and ('0000' in self.ssr_codes):

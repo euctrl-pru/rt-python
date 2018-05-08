@@ -8,7 +8,7 @@ Common trajectory merging functions.
 import pandas as pd
 
 
-def read_dataframe_with_new_ids(filename, ids_df, *, date_fields=['TIME_SOURCE']):
+def read_dataframe_with_new_ids(filename, ids_df, *, date_fields=['TIME']):
     """
     Reads items (flights, events or positions) from filename into a pandas
     Dataframe and merges with ids_df Dataframe on FLIGHT_ID.
@@ -16,7 +16,7 @@ def read_dataframe_with_new_ids(filename, ids_df, *, date_fields=['TIME_SOURCE']
     Returns a pandas DataFrame containing items (events or positions) with the
     new flight ids in the NEW_FLIGHT_ID column.
     """
-    df = pd.read_csv(filename, parse_dates=date_fields)
+    df = pd.read_csv(filename, parse_dates=date_fields, memory_map=True)
     return pd.merge(ids_df, df, left_index=True, right_on='FLIGHT_ID')
 
 

@@ -44,8 +44,8 @@ def verify_flight_matches(flight_matches, cpr_positions, adsb_positions,
 
     for cpr_id, cpr_pos in cpr_pos_match.groupby('FLIGHT_ID_x'):
         # Ensure that cpr_pos has more than one value!
-        if isinstance(cpr_pos['TIME_SOURCE'], pd.Series):
-            cpr_times = cpr_pos['TIME_SOURCE'].values
+        if isinstance(cpr_pos['TIME'], pd.Series):
+            cpr_times = cpr_pos['TIME'].values
             cpr_points = cpr_pos['ECEF_POINTS'].values
             cpr_alts = cpr_pos['ALT'].values
 
@@ -67,8 +67,8 @@ def verify_flight_matches(flight_matches, cpr_positions, adsb_positions,
                 # Ensure that adsb_id exists in adsb_positions
                 adsb_pos = adsb_positions.loc[adsb_id]
                 # Ensure that adsb_pos has more than one value!
-                if isinstance(adsb_pos['TIME_SOURCE'], pd.Series):
-                    adsb_times = adsb_pos['TIME_SOURCE'].values
+                if isinstance(adsb_pos['TIME'], pd.Series):
+                    adsb_times = adsb_pos['TIME'].values
                     adsb_points = adsb_pos['ECEF_POINTS'].values
                     adsb_alts = adsb_pos['ALT'].values
 
@@ -188,9 +188,9 @@ def match_cpr_adsb_trajectories(filenames, distance_threshold=DEFAULT_MATCHING_D
     cpr_points_df = pd.DataFrame()
     try:
         cpr_points_df = pd.read_csv(cpr_positions_filename,
-                                    parse_dates=['TIME_SOURCE'], index_col='FLIGHT_ID',
+                                    parse_dates=['TIME'], index_col='FLIGHT_ID',
                                     converters={'FLIGHT_ID': lambda x: int(x)},
-                                    usecols=['FLIGHT_ID', 'TIME_SOURCE',
+                                    usecols=['FLIGHT_ID', 'TIME',
                                              'LAT', 'LON', 'ALT'],
                                     memory_map=True)
     except EnvironmentError:
@@ -203,9 +203,9 @@ def match_cpr_adsb_trajectories(filenames, distance_threshold=DEFAULT_MATCHING_D
     adsb_points_df = pd.DataFrame()
     try:
         adsb_points_df = pd.read_csv(adsb_positions_filename,
-                                     parse_dates=['TIME_SOURCE'], index_col='FLIGHT_ID',
+                                     parse_dates=['TIME'], index_col='FLIGHT_ID',
                                      converters={'FLIGHT_ID': lambda x: int(x, 16)},
-                                     usecols=['FLIGHT_ID', 'TIME_SOURCE',
+                                     usecols=['FLIGHT_ID', 'TIME',
                                               'LAT', 'LON', 'ALT'],
                                      memory_map=True)
     except EnvironmentError:

@@ -34,7 +34,7 @@ def clean_position_data(positions_filename, max_speed=DEFAULT_MAX_SPEED,
     # Read the positions into a pandas DataFrame
     raw_df = pd.DataFrame()
     try:
-        raw_df = pd.read_csv(positions_filename, parse_dates=['TIME_SOURCE'],
+        raw_df = pd.read_csv(positions_filename, parse_dates=['TIME'],
                              memory_map=True)
         log.info('positions file read ok')
 
@@ -47,7 +47,7 @@ def clean_position_data(positions_filename, max_speed=DEFAULT_MAX_SPEED,
     # A numpy array to hold the invalid_positions
     invalid_positions = np.empty(0, dtype=bool)
 
-    raw_df.sort_values(by=['FLIGHT_ID', 'TIME_SOURCE'], inplace=True)
+    raw_df.sort_values(by=['FLIGHT_ID', 'TIME'], inplace=True)
     for flight_id, positions in raw_df.groupby('FLIGHT_ID'):
         try:
             invalid_pos, metrics = find_invalid_positions(positions,

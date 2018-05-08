@@ -29,7 +29,15 @@ id_2_find = sys.argv[2]
 # assume input file is sorted
 is_sorted = True
 
-output_filename = id_2_find + '.csv'
+output_filename = '_'.join([id_2_find, filename])
+
+# strip .bz2 or .gz from the output filename
+is_bz2 = (filename[-1] == '2')
+is_gzip = (filename[-1] == 'z')
+if is_bz2:
+    output_filename = output_filename[:-4]
+elif is_gzip:
+    output_filename = output_filename[:-3]
 
 time0 = timer()
 
@@ -38,8 +46,6 @@ rows = []
 # Open the csv file and read the rows
 try:
     # decompress bz2 and gzip files
-    is_bz2 = (filename[-1] == '2')
-    is_gzip = (filename[-1] == 'z')
     with bz2.open(filename, 'rt',  newline='') if (is_bz2) else \
         gzip.open(filename, 'rt',  newline='') if (is_gzip) else \
             open(filename, 'r') as file:

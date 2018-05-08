@@ -155,14 +155,14 @@ def merge_next_day_items(prev_filename, next_filename, ids_df, log):
     it returns True if successful, False otherwise.
     """
     new_items_df = get_next_day_items(next_filename, ids_df,
-                                      log, date_fields=['TIME_SOURCE'])
+                                      log, date_fields=['TIME'])
 
     # free memory used by get_next_day_items
     gc.collect()
 
     prev_df = pd.DataFrame()
     try:
-        prev_df = pd.read_csv(prev_filename, parse_dates=['TIME_SOURCE'],
+        prev_df = pd.read_csv(prev_filename, parse_dates=['TIME'],
                               converters={'FLIGHT_ID': lambda x: UUID(x)},
                               memory_map=True)
         log.info('%s read ok', prev_filename)
@@ -172,7 +172,7 @@ def merge_next_day_items(prev_filename, next_filename, ids_df, log):
 
     # merge the new items into the previous DataFrame
     new_prev_df = pd.concat([prev_df, new_items_df], ignore_index=True)
-    new_prev_df.sort_values(by=['FLIGHT_ID', 'TIME_SOURCE'], inplace=True)
+    new_prev_df.sort_values(by=['FLIGHT_ID', 'TIME'], inplace=True)
 
     # Output the new previous items
     new_prev_filename = 'new_' + prev_filename

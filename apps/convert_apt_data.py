@@ -82,7 +82,7 @@ class ApdsPosition:
         return self.date_time < other.date_time
 
     def __repr__(self):
-        return '{},,{}Z,,{:.5f},{:.5f},,,,,1,APDS {} {},,'. \
+        return '{},,{}Z,{:.5f},{:.5f},,,,,1,APDS {} {},,'. \
             format(self.id, self.date_time.isoformat(),
                    self.latitude, self.longitude, self.airport, self.stand)
 

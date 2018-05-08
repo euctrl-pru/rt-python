@@ -72,7 +72,7 @@ def merge_positions(positions1_df, positions2_df):
     Note: the postions are sorted in new flight id and time order.
     """
     new_positions_df = pd.concat([positions1_df, positions2_df], ignore_index=True)
-    new_positions_df.sort_values(by=['NEW_FLIGHT_ID', 'TIME_SOURCE'], inplace=True)
+    new_positions_df.sort_values(by=['NEW_FLIGHT_ID', 'TIME'], inplace=True)
     return new_positions_df
 
 
@@ -98,7 +98,7 @@ def update_flight_data(flights_df, positions_df):
             ssr_codes = positions['SSR_CODE'].drop_duplicates()
             flights_df.at[flight_id, 'SSR_CODES'] = ssr_codes.values
 
-            times = positions['TIME_SOURCE']
+            times = positions['TIME']
             start_time = times.iloc[0]
             flights_df.at[flight_id, 'PERIOD_START'] = start_time
             finish_time = times.iloc[-1]

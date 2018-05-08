@@ -203,7 +203,7 @@ def calculate_intersection(prev_arc, arc):
 def calculate_max_turn_initiation_distance(in_length, out_length, *,
                                            max_distance=TWENTY_NM):
     """
-    Calculates the maximum initation distance of a turn from its inbound and
+    Calculate the maximum initation distance of a turn from its inbound and
     outbound leg lengths.
 
     Note: the default maximum intiation distance is 20 NM, see ICAO 9905
@@ -212,7 +212,7 @@ def calculate_max_turn_initiation_distance(in_length, out_length, *,
     Parameters
     ----------
     in_length, out_length: float
-        The length sof the arcs before and after the intersection [radians].
+        The lengths of the arcs before and after the intersection [radians].
 
     max_distance : float
         The maximum permitted initation distance, default 20 NM [radians].
@@ -222,6 +222,65 @@ def calculate_max_turn_initiation_distance(in_length, out_length, *,
         The maximum turn initation distance [radians].
     """
     return min(min(in_length, out_length) / 2, max_distance)
+
+
+def calculate_turn_initiation_distance(prev_arc, arc, point,
+                                       max_distance, threshold):
+    """
+    Calculate the turn initation distance from the arc legs and a point.
+
+    Parameters
+    ----------
+    prev_arc: EcefArc
+        The inbound path leg.
+
+    arc: EcefArc
+        The outbound path leg.
+
+    point: EcefPoint
+        A point between the inbound and outbound legs.
+
+    max_distance : float
+        The maximum turn initiation distance [radians].
+
+    threshold : float
+        The across track distance threshold [radians]
+
+    Returns
+    -------
+        The turn initation distance [radians].
+
+    """
+    # Calculate the distance from the intersection to the point
+    distance = distance_radians(arc.a, point)
+    if distance < max_distance:
+        xtd_in = abs(prev_arc.cross_track_distance(point))
+        xtd_out = abs(arc.cross_track_distance(point))
+
+        # determine whether the point is close to either leg
+        if (xtd_in > threshold) and (xtd_out > threshold):
+            # calculate the bisector of the turn legs
+            pole = EcefPoint(prev_arc.pole + arc.pole)
+            pole.normalize()
+            xtd = abs(np.arcsin(np.dot(pole, point)))
+            if xtd < distance:
+                # calculate the angle from the bisector of the turn legs
+                # Note: use arccos since the bisector is prependicular to pole
+                angle = np.arccos(xtd / distance)
+                half_turn_angle = abs(prev_arc.turn_angle(arc.b)) / 2
+                # calculate the turn radius
+                cos_angle = np.cos(angle)
+                cos_half_turn_angle = np.cos(half_turn_angle)
+                sin2_half_turn_angle = 1 - cos_half_turn_angle ** 2
+                # ensure that factor is never negative for sqrt
+                factor = max(cos_angle ** 2 - sin2_half_turn_angle, 0.0)
+                radius = distance * cos_half_turn_angle * \
+                    (cos_angle + np.sqrt(factor)) / sin2_half_turn_angle
+
+                # Calculate turn initiation distance from the radius
+                distance = radius * np.tan(half_turn_angle)
+
+    return min(distance, max_distance)
 
 
 def derive_horizontal_path(ecef_points, threshold):
@@ -266,15 +325,21 @@ def derive_horizontal_path(ecef_points, threshold):
 
         # Calculate the turn parameters at the waypoint
         turn_angle = prev_arc.turn_angle(arc.b)
-        turn_distance = calculate_max_turn_initiation_distance(prev_length, arc.length)
+        max_turn_distance = calculate_max_turn_initiation_distance(prev_length, arc.length)
+
+        waypoint = EcefPoint(arc.a)
+        turn_distance = 0.0
 
         # Determine whether the turn is valid, calculate waypoint and
         # turn initiation distance accordingly
         is_valid_turn = (MIN_TURN_ANGLE < abs(turn_angle) <= MAX_TURN_ANGLE) and \
-            (turn_distance > TWO_NM)
-        waypoint = calculate_intersection(prev_arc, arc) if is_valid_turn \
-            else EcefPoint(arc.a)  # the start point of the next arc
-        turn_distance = turn_distance if is_valid_turn else 0.0
+            (max_turn_distance > TWO_NM)
+        if is_valid_turn:
+            waypoint = calculate_intersection(prev_arc, arc)
+            turn_distance = calculate_turn_initiation_distance(prev_arc, arc,
+                                                               ecef_points[prev_index + 1],
+                                                               max_turn_distance,
+                                                               threshold / 4.0)
 
         turn_distances.append(turn_distance)
         path_waypoints.append(waypoint)

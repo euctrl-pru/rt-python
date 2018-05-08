@@ -41,9 +41,9 @@ def verify_matches(flight_matches, positions1, positions2, flight_ids, delta_tim
     for next_id, next_pos in next_pos_match.groupby('FLIGHT_ID_y'):
         # Ensure that next_pos is new has more than one value!
         if next_id not in flight_ids and \
-                isinstance(next_pos['TIME_SOURCE'], pd.Series):
+                isinstance(next_pos['TIME'], pd.Series):
 
-            next_times = next_pos['TIME_SOURCE'].values
+            next_times = next_pos['TIME'].values
             next_points = calculate_EcefPoints(next_pos['LAT'].values,
                                                next_pos['LON'].values)
             next_alts = next_pos['ALT'].values
@@ -51,8 +51,8 @@ def verify_matches(flight_matches, positions1, positions2, flight_ids, delta_tim
             for prev_id in next_pos['FLIGHT_ID_x'].unique():
                 prev_pos = positions1.loc[prev_id]
                 # Ensure that prev_pos has more than one value!
-                if isinstance(prev_pos['TIME_SOURCE'], pd.Series):
-                    prev_times = prev_pos['TIME_SOURCE'].values
+                if isinstance(prev_pos['TIME'], pd.Series):
+                    prev_times = prev_pos['TIME'].values
                     prev_points = calculate_EcefPoints(prev_pos['LAT'].values,
                                                        prev_pos['LON'].values)
                     prev_alts = prev_pos['ALT'].values
@@ -148,9 +148,9 @@ def match_consecutive_day_trajectories(filenames,
     prev_points_df = pd.DataFrame()
     try:
         prev_points_df = pd.read_csv(prev_positions_filename,
-                                     parse_dates=['TIME_SOURCE'], index_col='FLIGHT_ID',
+                                     parse_dates=['TIME'], index_col='FLIGHT_ID',
                                      converters={'FLIGHT_ID': lambda x: UUID(x)},
-                                     usecols=['FLIGHT_ID', 'TIME_SOURCE',
+                                     usecols=['FLIGHT_ID', 'TIME',
                                               'LAT', 'LON', 'ALT'])
     except EnvironmentError:
         log.error('could not read file: %s', prev_positions_filename)
@@ -162,9 +162,9 @@ def match_consecutive_day_trajectories(filenames,
     next_points_df = pd.DataFrame()
     try:
         next_points_df = pd.read_csv(next_positions_filename,
-                                     parse_dates=['TIME_SOURCE'], index_col='FLIGHT_ID',
+                                     parse_dates=['TIME'], index_col='FLIGHT_ID',
                                      converters={'FLIGHT_ID': lambda x: UUID(x)},
-                                     usecols=['FLIGHT_ID', 'TIME_SOURCE',
+                                     usecols=['FLIGHT_ID', 'TIME',
                                               'LAT', 'LON', 'ALT'])
     except EnvironmentError:
         log.error('could not read file: %s', next_positions_filename)

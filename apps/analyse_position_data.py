@@ -35,8 +35,8 @@ def analyse_position_data(filename,
 
     raw_df = pd.DataFrame()
     try:
-        raw_df = pd.read_csv(filename, parse_dates=['TIME_SOURCE'],
-                             usecols=['FLIGHT_ID', 'TIME_SOURCE',
+        raw_df = pd.read_csv(filename, parse_dates=['TIME'],
+                             usecols=['FLIGHT_ID', 'TIME',
                                       'LAT', 'LON', 'ALT'],
                              memory_map=True)
         log.info('positions file read ok')

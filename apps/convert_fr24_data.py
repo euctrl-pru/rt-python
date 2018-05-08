@@ -102,7 +102,7 @@ class AdsbPosition:
             and (self.aircraft_address == other.aircraft_address)
 
     def __repr__(self):
-        return '{},,{}Z,,{:.5f},{:.5f},{:d},{:.1f},{:.3f},{:d},{},FR24 {},{},\'{}\''. \
+        return '{},,{}Z,{:.5f},{:.5f},{:d},{:.1f},{:.3f},{:d},{},FR24 {},{},\'{}\''. \
             format(self.id, self.date_time.isoformat(), self.latitude, self.longitude, self.altitude,
                    self.ground_speed, self.ground_track, self.vertical_rate,
                    self.on_ground, self.radar_id, self.aircraft_address, self.ssr_code)

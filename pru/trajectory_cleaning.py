@@ -82,7 +82,7 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
     # Duplicate positions with an aircraft address are invalid
     aircraft_address = points_df['AIRCRAFT_ADDRESS']
     invalid_positions = points_df.duplicated(
-        subset=['TIME_SOURCE', 'LAT', 'LON', 'ALT',
+        subset=['TIME', 'LAT', 'LON', 'ALT',
                 'AIRCRAFT_ADDRESS', 'SSR_CODE']).values & \
         (aircraft_address != '')
 
@@ -104,8 +104,8 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
     ecef_points = calculate_EcefPoints(points_df['LAT'].values,
                                        points_df['LON'].values)
     altitudes = points_df['ALT'].values
-    times = calculate_elapsed_times(points_df['TIME_SOURCE'].values,
-                                    points_df['TIME_SOURCE'].values[0])
+    times = calculate_elapsed_times(points_df['TIME'].values,
+                                    points_df['TIME'].values[0])
     ssr_codes = points_df['SSR_CODE'].values
 
     # Counts of errors

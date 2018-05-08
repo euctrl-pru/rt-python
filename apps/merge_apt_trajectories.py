@@ -13,7 +13,6 @@ import pandas as pd
 from uuid import UUID
 from pru.trajectory_fields import read_iso8601_date_string, \
     is_valid_iso8601_date, split_dual_date, ISO8601_DATETIME_FORMAT
-# create_iso8601_csv_filename
 from pru.trajectory_files import create_merge_apds_output_filenames
 from pru.trajectory_merging import \
     read_dataframe_with_new_ids, replace_old_flight_ids
@@ -53,14 +52,14 @@ def merge_items(day_filename, apds_filename, ids_df, log):
     try:
         day_items_df = pd.read_csv(day_filename,
                                    converters={'FLIGHT_ID': lambda x: UUID(x)},
-                                   parse_dates=['TIME_SOURCE'],
+                                   parse_dates=['TIME'],
                                    memory_map=True)
     except EnvironmentError:
         log.error('could not read daily file: %s', day_filename)
         return pd.DataFrame()
 
     items_df = pd.concat([day_items_df, apds_items_df], ignore_index=True)
-    items_df.sort_values(by=['FLIGHT_ID', 'TIME_SOURCE'], inplace=True)
+    items_df.sort_values(by=['FLIGHT_ID', 'TIME'], inplace=True)
 
     return items_df
 
@@ -86,7 +85,7 @@ def merge_apds_trajectories(filenames):
     # Extract date strings from the input filenames and validate them
     input_date_strings = [''] * len(input_filenames)
     for i in range(len(input_filenames)):
-        filename = sys.argv[i + 1]
+        filename = filenames[i]
         input_date_strings[i] = read_iso8601_date_string(filename)
         if is_valid_iso8601_date(input_date_strings[i]):
             log.info('%s: %s', input_filenames[i], filename)

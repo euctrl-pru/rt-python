@@ -12,7 +12,7 @@ import errno
 import pandas as pd
 from uuid import UUID
 from pru.trajectory_fields import read_iso8601_date_string, \
-    is_valid_iso8601_date, create_iso8601_csv_filename, split_dual_date
+    is_valid_iso8601_date, split_dual_date
 from pru.trajectory_files import APDS, create_matching_ids_filename
 from pru.logger import logger
 
@@ -35,7 +35,7 @@ def match_events(day_flights_df, apds_flights_df, day_events_df, apds_events_df)
     # Find events at the same time in both sets.
     apds_day_flights = pd.merge(apds_flight_events_df, day_flight_events_df,
                                 on=['CALLSIGN', 'ADEP', 'ADES',
-                                    'EVENT_TYPE', 'TIME_SOURCE'])
+                                    'EVENT_TYPE', 'TIME'])
 
     # sort by the apds flight id and drop duplicates (if any)
     apds_day_flights.sort_values(by=['FLIGHT_ID_x'], inplace=True)
@@ -66,7 +66,7 @@ def match_apds_trajectories(filenames):
     # Extract date strings from the input filenames and validate them
     input_date_strings = [''] * len(input_filenames)
     for i in range(len(input_filenames)):
-        filename = sys.argv[i + 1]
+        filename = filenames[i]
         input_date_strings[i] = read_iso8601_date_string(filename)
         if is_valid_iso8601_date(input_date_strings[i]):
             log.info('%s: %s', input_filenames[i], filename)
@@ -150,7 +150,7 @@ def match_apds_trajectories(filenames):
     try:
         day_events_df = pd.read_csv(day_events_filename,
                                     converters={'FLIGHT_ID': lambda x: UUID(x)},
-                                    parse_dates=['TIME_SOURCE'],
+                                    parse_dates=['TIME'],
                                     memory_map=True)
     except EnvironmentError:
         log.error('could not read file: %s', day_events_filename)
@@ -162,7 +162,7 @@ def match_apds_trajectories(filenames):
     apds_events_df = pd.DataFrame()
     try:
         apds_events_df = pd.read_csv(apds_events_filename,
-                                     parse_dates=['TIME_SOURCE'],
+                                     parse_dates=['TIME'],
                                      memory_map=True)
     except EnvironmentError:
         log.error('could not read file: %s', apds_events_filename)
