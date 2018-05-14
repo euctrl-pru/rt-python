@@ -372,7 +372,7 @@ class EcefPath:
 
         return distance
 
-    def calculate_path_distance(self, point, index):
+    def calculate_path_distance(self, point, index, across_track_tolerance):
         """
         Calculate the distance of a point along the path by the leg at index.
 
@@ -388,6 +388,9 @@ class EcefPath:
 
         index: integer
             The index of the point at the start of the path leg.
+
+        across_track_tolerance: float
+            The maximum across track distance [radians]
 
         Returns
         -------
@@ -409,10 +412,14 @@ class EcefPath:
             arc = EcefArc(self.points[index + 1], self.points[index + 2])
             next_distance = arc.closest_distance(point)
 
-        # Get the index of the closest leg
-        if (prev_distance < closest_distance) \
-                or (next_distance < closest_distance):
-            index = index - 1 if (prev_distance < next_distance) else index + 1
+        min_distance = min(closest_distance, min(prev_distance, next_distance))
+        if min_distance < across_track_tolerance:
+            # Get the index of the closest leg
+            if (prev_distance < closest_distance) \
+                    or (next_distance < closest_distance):
+                index = index - 1 if (prev_distance < next_distance) else index + 1
+        else:  # None of the legs are within across_track_tolerance
+            index, _ = find_index_and_ratio(self.points, point)
 
         # Calculate the path distance of the closest leg
         path_length = self.path_lengths[index + 1]
@@ -421,7 +428,8 @@ class EcefPath:
         # Add the cumulative path lengths
         return distance + np.sum(self.path_lengths[:index + 1])
 
-    def calculate_path_distances(self, ecef_points, *, index=0):
+    def calculate_path_distances(self, ecef_points, across_track_tolerance,
+                                 *, index=0):
         """
         The distances along the path to the ecef_points.
 
@@ -431,6 +439,9 @@ class EcefPath:
         ----------
         ecef_points: EcefPoints points.
             An ordered array of EcefPoints.
+
+        across_track_tolerance: float
+            The maximum across track distance [radians]
 
         index: integer
             The index of the closest path leg  to the first point, default 0.
@@ -443,7 +454,8 @@ class EcefPath:
 
         path_distance = self.path_lengths[index + 1]
         for i, point in enumerate(ecef_points):
-            distances[i] = self.calculate_path_distance(point, index)
+            distances[i] = self.calculate_path_distance(point, index,
+                                                        across_track_tolerance)
 
             past_current_leg = (distances[i] > path_distance)
             is_last_leg = (index >= len(self) - 2)

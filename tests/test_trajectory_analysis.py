@@ -137,7 +137,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
 
         filename = '/clean_cpr_259599_BAW307_2017-08-01.csv'
         points_df = pd.read_csv(test_data_home + filename,
-                                parse_dates=['TIME_SOURCE'])
+                                parse_dates=['TIME'])
 
         flight_id = '259599'
         across_track_tolerance = 0.25
@@ -154,7 +154,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
 
         filename = '/clean_cpr_255332_SAS1643_2017-08-01.csv'
         points_df = pd.read_csv(test_data_home + filename,
-                                parse_dates=['TIME_SOURCE'])
+                                parse_dates=['TIME'])
 
         flight_id = '255332'
         across_track_tolerance = 0.25
@@ -164,6 +164,38 @@ class TestTrajectorySmoothing(unittest.TestCase):
         self.assertEqual(metrics[1], int(AltitudeProfileType.CLIMBING_AND_DESCENDING))
         self.assertEqual(metrics[3], 1)
         # print(metrics)
+
+    def test_analyse_trajectory_3(self):
+        test_data_home = env.get('TEST_DATA_HOME')
+        self.assertTrue(test_data_home)
+
+        filename = '/295765_cpr_positions_2017-07-01.csv'
+        points_df = pd.read_csv(test_data_home + filename,
+                                parse_dates=['TIME'])
+
+        flight_id = '295765'
+        across_track_tolerance = 0.25
+        traj, metrics = analyse_trajectory(flight_id, points_df,
+                                           across_track_tolerance)
+        self.assertEqual(metrics[0], flight_id)
+        self.assertEqual(metrics[1], int(AltitudeProfileType.CLIMBING))
+        self.assertEqual(metrics[3], 1)
+
+    def test_analyse_trajectory_4(self):
+        test_data_home = env.get('TEST_DATA_HOME')
+        self.assertTrue(test_data_home)
+
+        filename = '/286375_cpr_positions_2017-07-01.csv'
+        points_df = pd.read_csv(test_data_home + filename,
+                                parse_dates=['TIME'])
+
+        flight_id = '286375'
+        across_track_tolerance = 0.25
+        traj, metrics = analyse_trajectory(flight_id, points_df,
+                                           across_track_tolerance)
+        self.assertEqual(metrics[0], flight_id)
+        self.assertEqual(metrics[1], int(AltitudeProfileType.CLIMBING))
+        self.assertEqual(metrics[3], 1)
 
 
 if __name__ == '__main__':

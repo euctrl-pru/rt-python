@@ -62,7 +62,7 @@ def analyse_position_data(filename,
             if not (flights_count % LOGGING_COUNT):
                 log.info('%i flights analysed', flights_count)
 
-        except (ValueError, TypeError):
+        except (ValueError, IndexError, TypeError):
             log.exception('analyse_trajectory flight id: %s', flight_id)
 
     log.info('analyse_trajectory finished for %s flights', flights_count)
@@ -72,13 +72,18 @@ def analyse_position_data(filename,
     if is_bz2:  # remove the .bz2 from the end of the filename
         positions_filename = positions_filename[:-len(BZ2_FILE_EXTENSION)]
 
+    # add the time_method and tolerance to the front of the filename
+    tolerance_string = str(across_track_tolerance).replace('.', '')
+    positions_filename = '_'.join([time_method, tolerance_string, positions_filename])
+
     trajectory_filename = positions_filename.replace(POSITIONS, TRAJECTORIES)
     trajectory_filename = trajectory_filename.replace(CSV_FILE_EXTENSION,
                                                       JSON_FILE_EXTENSION)
 
     try:
         with open(trajectory_filename, 'w') as file:
-            file.write(dumps_SmoothedTrajectories(trajectories))
+            file.write(dumps_SmoothedTrajectories(trajectories, time_method,
+                                                  across_track_tolerance))
     except EnvironmentError:
         log.error('could not write file: %s', trajectory_filename)
         return errno.EACCES

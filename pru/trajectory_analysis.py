@@ -493,19 +493,27 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
     position_period = duration / (len(points_df) - 1)
 
     # convert across_track_tolerance to radians
-    threshold = np.deg2rad(across_track_tolerance / 60.0)
+    across_track_radians = np.deg2rad(across_track_tolerance / 60.0)
 
     ecef_points = calculate_EcefPoints(points_df['LAT'].values,
                                        points_df['LON'].values)
 
     # derive the EcefPath
-    path = derive_horizontal_path(ecef_points, threshold)
+    path = derive_horizontal_path(ecef_points, across_track_radians)
+    horizontal_path_distances = rad2nm(path.path_distances())
     lats, lons = path.point_lat_longs()
     tads = path.turn_initiation_distances_nm()
     hpath = HorizontalPath(lats, lons, tads)
 
     # Calculate distances of positions along the ECEF path in Nautical Miles
-    path_distances = rad2nm(path.calculate_path_distances(ecef_points))
+    path_distances = rad2nm(path.calculate_path_distances(ecef_points,
+                                                          across_track_radians))
+
+    # Raise an exception if the path_distances are shorter than the horizontal_path
+    horizontal_path_length = horizontal_path_distances[-1] - across_track_tolerance
+    points_path_length = path_distances[-1]
+    if points_path_length < horizontal_path_length:
+        raise ValueError("Horizontal path distances are short")
 
     # Sort positions by path distance then time
     sorted_df = pd.DataFrame({'distance': path_distances,

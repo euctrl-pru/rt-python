@@ -24,8 +24,12 @@ log = logger(__name__)
 DEFAULT_MAXIMUM_TIME_DELTA = 150  # 2.5 minutes
 """ The default maximum time difference, in seconds. """
 
+DEFAULT_MAXIMUM_SPEED = 750.0
+""" The default maximum speed in Knots. """
 
-def verify_matches(flight_matches, positions1, positions2, flight_ids, delta_time):
+
+def verify_matches(flight_matches, positions1, positions2, flight_ids,
+                   delta_time, max_speed):
     """
     Verifies the pairs of flight ids in flight_matches by calling
     compare_trajectory_positions with the cpr_positions and adsb_positions
@@ -59,7 +63,8 @@ def verify_matches(flight_matches, positions1, positions2, flight_ids, delta_tim
                     valid_match = compare_trajectory_positions(next_times, prev_times,
                                                                next_points, prev_points,
                                                                next_alts, prev_alts,
-                                                               time_threshold=delta_time)
+                                                               time_threshold=delta_time,
+                                                               speed_threshold=max_speed)
                     if (valid_match):
                         matches += 1
                         flight_ids[next_id] = prev_id
@@ -75,7 +80,8 @@ input_filenames = ['prev flights file',
 
 
 def match_consecutive_day_trajectories(filenames,
-                                       max_time_difference=DEFAULT_MAXIMUM_TIME_DELTA):
+                                       max_time_difference=DEFAULT_MAXIMUM_TIME_DELTA,
+                                       max_speed=DEFAULT_MAXIMUM_SPEED):
 
     prev_flights_filename = filenames[0]
     next_flights_filename = filenames[1]
@@ -189,7 +195,7 @@ def match_consecutive_day_trajectories(filenames,
 
     # verify aircraft address matches
     aa_matches = verify_matches(merge_aa_time, prev_points_df, next_points_df,
-                                flight_ids, max_time_difference)
+                                flight_ids, max_time_difference, max_speed)
     log.info('aircraft address matches: %d, flight_ids: %d',
              aa_matches, len(flight_ids))
 
@@ -200,7 +206,7 @@ def match_consecutive_day_trajectories(filenames,
 
     # verify callsign matches
     cs_matches = verify_matches(merge_cs_time, prev_points_df, next_points_df,
-                                flight_ids, max_time_difference)
+                                flight_ids, max_time_difference, max_speed)
     log.info('callsign matches: %d, total matches:%d, flight_ids: %d',
              cs_matches, aa_matches + cs_matches, len(flight_ids))
 
@@ -211,7 +217,7 @@ def match_consecutive_day_trajectories(filenames,
 
     # verify departure and destination airport matches
     apt_matches = verify_matches(merge_dep_des_time, prev_points_df, next_points_df,
-                                 flight_ids, max_time_difference)
+                                 flight_ids, max_time_difference, max_speed)
     log.info('airport matches: %d, total matches:%d, flight_ids: %d',
              apt_matches, apt_matches + aa_matches + cs_matches, len(flight_ids))
 
@@ -241,14 +247,19 @@ if __name__ == '__main__':
     app_name = os.path.basename(sys.argv[0])
     if len(sys.argv) <= len(input_filenames):
         print('Usage: ' + app_name + ' <' + filenames_string + '>'
-              ' [maximum time difference]')
+              ' [maximum time difference] [max_speed]')
         sys.exit(errno.EINVAL)
 
     max_time_difference = DEFAULT_MAXIMUM_TIME_DELTA
     if len(sys.argv) > (len(input_filenames) + 1):
         max_time_difference = float(sys.argv[5])
 
+    max_speed = DEFAULT_MAXIMUM_SPEED
+    if len(sys.argv) > (len(input_filenames) + 2):
+        max_speed = float(sys.argv[6])
+
     error_code = match_consecutive_day_trajectories(sys.argv[1:5],
-                                                    max_time_difference)
+                                                    max_time_difference,
+                                                    max_speed)
     if error_code:
         sys.exit(error_code)

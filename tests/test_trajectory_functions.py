@@ -294,8 +294,15 @@ class TestTrajectoryFunctions(unittest.TestCase):
         # Second trajectory delayed by 10 mins, by end of first trajectory
         # with a minutes time_threshold.
         self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_4,
-                                                     ecef_points_1, ecef_points_3,
-                                                     alts1, alts1, time_threshold=60.0))
+                                                     ecef_points_3, ecef_points_1,
+                                                     alts1, alts1, time_threshold=60.0,
+                                                     speed_threshold=750.0))
+
+        # But other way around, ends are not close enough
+        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_4,
+                                                      ecef_points_1, ecef_points_3,
+                                                      alts1, alts1, time_threshold=60.0,
+                                                      speed_threshold=750.0))
 
 
 if __name__ == '__main__':

@@ -303,7 +303,8 @@ def calculate_value(values, index, ratio=0.0):
 
 def compare_trajectory_positions(a_times, b_times, a_points, b_points,
                                  a_alts, b_alts, *, distance_threshold=2.0,
-                                 alt_threshold=200.0, time_threshold=0.0):
+                                 alt_threshold=200.0, time_threshold=0.0,
+                                 speed_threshold=750.0):
     """
     Compare trajectory points to determine whether they are for the same flight.
 
@@ -330,6 +331,10 @@ def compare_trajectory_positions(a_times, b_times, a_points, b_points,
     time_threshold: float
         The maximum time [seconds] between trajectory positions to be
         considered to be on the same trajectory, default zero seconds.
+
+    speed_threshold: float
+        The maximum speed [Knots] between trajectory positions to be
+        considered to be on the same trajectory, default 600 Knots.
 
     Returns
     -------
@@ -377,6 +382,14 @@ def compare_trajectory_positions(a_times, b_times, a_points, b_points,
 
     else:  # trajectories do not overlap in time
         # determine whether they are within time_threshold
-        return delta_time <= time_threshold
+        if delta_time <= time_threshold:
+            # determine whether they are within speed_threshold
+            point_a = a_points[0]
+            point_b = b_points[-1]
+            distance = distance_nm(point_a, point_b)
+            speed = calculate_speed(distance, delta_time)
+            return speed <= speed_threshold
+        else:
+            return False
 
     return (distance <= distance_threshold) and (delta_alt <= alt_threshold)

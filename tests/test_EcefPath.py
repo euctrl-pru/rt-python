@@ -36,6 +36,8 @@ EXPECTED_PATH_DISTANCES = [0., 59.99086148, 117.83613924, 231.40025743,
                            339.66739543, 458.98274085, 621.29559004, 685.67001826,
                            845.19084389, 918.76290176, 977.72388715, 1037.723887]
 
+ACROSS_TRACK_TOLERANCE = 0.25 * NM
+
 
 class TestEcefPath(unittest.TestCase):
 
@@ -189,54 +191,65 @@ class TestEcefPath(unittest.TestCase):
         ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
 
         # Start point
-        distance_0 = ecef_path.calculate_path_distance(ecef_points[0], 0)
+        distance_0 = ecef_path.calculate_path_distance(ecef_points[0], 0,
+                                                       ACROSS_TRACK_TOLERANCE)
         self.assertEqual(distance_0, 0.0)
 
         # from next leg
-        distance_0 = ecef_path.calculate_path_distance(ecef_points[0], 1)
+        distance_0 = ecef_path.calculate_path_distance(ecef_points[0], 1,
+                                                       ACROSS_TRACK_TOLERANCE)
         self.assertEqual(distance_0, 0.0)
 
         # Point at end of first, straight leg
-        distance_1_0 = ecef_path.calculate_path_distance(ecef_points[1], 0)
+        distance_1_0 = ecef_path.calculate_path_distance(ecef_points[1], 0,
+                                                         ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_1_0), EXPECTED_PATH_DISTANCES[1])
 
         # from next leg
-        distance_1_0 = ecef_path.calculate_path_distance(ecef_points[1], 1)
+        distance_1_0 = ecef_path.calculate_path_distance(ecef_points[1], 1,
+                                                         ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_1_0), EXPECTED_PATH_DISTANCES[1])
 
         # from leg after next
-        distance_1_0 = ecef_path.calculate_path_distance(ecef_points[1], 2)
+        distance_1_0 = ecef_path.calculate_path_distance(ecef_points[1], 2,
+                                                         ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_1_0), EXPECTED_PATH_DISTANCES[1])
 
         # Point in middle of first,  straight leg
         pos_1_5 = ecef_path.calculate_position(1, 0.5)
-        distance_1_5 = ecef_path.calculate_path_distance(pos_1_5, 1)
+        distance_1_5 = ecef_path.calculate_path_distance(pos_1_5, 1,
+                                                         ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_1_5),
                             EXPECTED_PATH_DISTANCES[1] + 0.5 * EXPECTED_PATH_LENGTHS[2])
 
         # from previous leg
-        distance_1_5 = ecef_path.calculate_path_distance(pos_1_5, 0)
+        distance_1_5 = ecef_path.calculate_path_distance(pos_1_5, 0,
+                                                         ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_1_5),
                             EXPECTED_PATH_DISTANCES[1] + 0.5 * EXPECTED_PATH_LENGTHS[2])
 
         # from next leg
-        distance_1_5 = ecef_path.calculate_path_distance(pos_1_5, 2)
+        distance_1_5 = ecef_path.calculate_path_distance(pos_1_5, 2,
+                                                         ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_1_5),
                             EXPECTED_PATH_DISTANCES[1] + 0.5 * EXPECTED_PATH_LENGTHS[2])
 
         # Point along a turning leg
         pos_2_75 = ecef_path.calculate_position(2, 0.75)
-        distance_2_75 = ecef_path.calculate_path_distance(pos_2_75, 2)
+        distance_2_75 = ecef_path.calculate_path_distance(pos_2_75, 2,
+                                                          ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_2_75),
                             EXPECTED_PATH_DISTANCES[2] + 0.75 * EXPECTED_PATH_LENGTHS[3])
 
         # Last point
-        distance_last = ecef_path.calculate_path_distance(ecef_points[-1], 10)
+        distance_last = ecef_path.calculate_path_distance(ecef_points[-1], 10,
+                                                          ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_last), EXPECTED_PATH_DISTANCES[11],
                             decimal=6)
 
         # from previous leg
-        distance_last = ecef_path.calculate_path_distance(ecef_points[-1], 9)
+        distance_last = ecef_path.calculate_path_distance(ecef_points[-1], 9,
+                                                          ACROSS_TRACK_TOLERANCE)
         assert_almost_equal(rad2nm(distance_last), EXPECTED_PATH_DISTANCES[11],
                             decimal=6)
 
@@ -245,7 +258,8 @@ class TestEcefPath(unittest.TestCase):
 
         ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
 
-        distances = rad2nm(ecef_path.calculate_path_distances(ecef_points))
+        distances = rad2nm(ecef_path.calculate_path_distances(ecef_points,
+                                                              ACROSS_TRACK_TOLERANCE))
         self.assertEqual(len(distances), len(ecef_points))
         self.assertEqual(distances[0], 0.0)
         assert_almost_equal(distances[11], EXPECTED_PATH_DISTANCES[11], decimal=6)
@@ -344,7 +358,8 @@ class TestEcefPath(unittest.TestCase):
 
         ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
 
-        distances = rad2nm(ecef_path.calculate_path_distances(ecef_points))
+        distances = rad2nm(ecef_path.calculate_path_distances(ecef_points,
+                                                              ACROSS_TRACK_TOLERANCE))
         self.assertEqual(len(distances), len(ecef_points))
 
         xtds = ecef_path.calculate_cross_track_distances(ecef_points, distances)

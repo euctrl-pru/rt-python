@@ -118,9 +118,12 @@ class TestTrajectoryFiles(unittest.TestCase):
     def test_create_analyse_position_data_filenames(self):
         test_process = CPR_FR24
         test_date = '2017-08-01'
-        names = create_analyse_position_data_filenames(test_process, test_date)
-        self.assertEqual(names[0], 'cpr_fr24_trajectories_2017-08-01.json')
-        self.assertEqual(names[1], 'cpr_fr24_traj_metrics_2017-08-01.csv')
+        distance_tolerance = 0.5
+        method = 'lm'
+        names = create_analyse_position_data_filenames(test_process, test_date,
+                                                       distance_tolerance, method)
+        self.assertEqual(names[0], 'lm_05_cpr_fr24_trajectories_2017-08-01.json')
+        self.assertEqual(names[1], 'lm_05_cpr_fr24_traj_metrics_2017-08-01.csv')
 
     def test_create_match_cpr_adsb_input_filenames(self):
         test_date = '2017-08-01'

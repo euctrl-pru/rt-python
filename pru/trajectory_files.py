@@ -43,6 +43,7 @@ USER_INTERSECTIONS = 'user_intersections'
 # Misc
 PREV_DAY = 'prev_day'
 NEW_CPR_FR24 = 'new_cpr_fr24'
+RAW_CPR_FR24 = 'raw_cpr_fr24'
 RAW = 'raw'
 NEW = 'new'
 REF = 'ref'
@@ -181,12 +182,17 @@ def create_clean_position_data_filenames(process, datestring):
             create_error_metrics_filename(process, datestring)]
 
 
-def create_analyse_position_data_filenames(process, datestring):
+def create_analyse_position_data_filenames(process, datestring,
+                                           distance_tolerance, method):
     """
-    Create the list of filenames output by clean_position_data.py.
+    Create the list of filenames output by analyse_position_data.py.
     """
-    return [create_trajectories_filename(process, datestring),
-            create_trajectory_metrics_filename(process, datestring)]
+    tolerance_string = str(distance_tolerance).replace('.', '')
+    traj_filename = '_'.join([method, tolerance_string,
+                              create_trajectories_filename(process, datestring)])
+    metrics_filename = '_'.join([method, tolerance_string,
+                                 create_trajectory_metrics_filename(process, datestring)])
+    return [traj_filename, metrics_filename]
 
 
 def create_match_cpr_adsb_input_filenames(datestring):
