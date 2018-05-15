@@ -108,6 +108,13 @@ class TestTrajectoryFiles(unittest.TestCase):
         self.assertEqual(names[1], 'apds_positions_2017-08-01_2017-08-31.csv')
         self.assertEqual(names[2], 'apds_events_2017-08-01_2017-08-31.csv')
 
+    def test_create_daily_filenames(self):
+        date = '2017-08-01'
+        names = create_daily_filenames(date)
+        self.assertEqual(names[0], 'cpr_fr24_flights_2017-08-01.csv')
+        self.assertEqual(names[1], 'cpr_fr24_positions_2017-08-01.csv')
+        self.assertEqual(names[2], 'cpr_fr24_events_2017-08-01.csv')
+
     def test_create_clean_position_data_filenames(self):
         test_process = CPR_FR24
         test_date = '2017-08-01'

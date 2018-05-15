@@ -174,6 +174,13 @@ def create_convert_apds_filenames(from_date, to_date):
             create_apds_events_filename(from_date, to_date)]
 
 
+def create_daily_filenames(datestring, process=CPR_FR24):
+    """ Create the list of filenames for a day. """
+    return [create_flights_filename(process, datestring),
+            create_positions_filename(process, datestring),
+            create_events_filename(process, datestring)]
+
+
 def create_clean_position_data_filenames(process, datestring):
     """
     Create the list of filenames output by clean_position_data.py.
