@@ -65,9 +65,11 @@ class SmoothedTrajectory:
         return cls(flight_id, path, timep, altp)
 
 
-def dumps_SmoothedTrajectories(trajs):
+def dumps_SmoothedTrajectories(trajs, method, tolerance):
     'Dump a list of SmoothedTrajectories to a JSON string'
-    string_list = ['{\n"data" : [\n']
+    string_list = ['{\n"method" : "', method,
+                   '",\n"distance_tolerance" : ', str(tolerance),
+                   ',\n"data" : [\n']
     if len(trajs):
         string_list.append(trajs[0].dumps())
         for t in trajs[1:]:

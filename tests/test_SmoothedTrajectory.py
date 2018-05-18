@@ -90,7 +90,7 @@ class TestSmoothedTrajectory(unittest.TestCase):
 
         trajs_0 = [traj_0, traj_0, traj_0]
 
-        s = dumps_SmoothedTrajectories(trajs_0)
+        s = dumps_SmoothedTrajectories(trajs_0, 'lm', 0.5)
         # print(s)
 
         json_1 = json.loads(s)

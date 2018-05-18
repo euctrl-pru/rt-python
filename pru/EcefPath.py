@@ -420,6 +420,7 @@ class EcefPath:
                 index = index - 1 if (prev_distance < next_distance) else index + 1
         else:  # None of the legs are within across_track_tolerance
             index, _ = find_index_and_ratio(self.points, point)
+            index = min(index, len(self) - 2)
 
         # Calculate the path distance of the closest leg
         path_length = self.path_lengths[index + 1]

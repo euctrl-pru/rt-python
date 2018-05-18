@@ -10,7 +10,7 @@ import pandas as pd
 import scipy.optimize
 from pru.EcefPoint import rad2nm
 from pru.horizontal_path_functions import derive_horizontal_path
-from pru.ecef_functions import calculate_EcefPoints
+from pru.ecef_functions import calculate_EcefPoints, find_most_extreme_value
 from pru.trajectory_functions import calculate_delta_time, calculate_elapsed_times, \
     calculate_speed, find_duplicate_values, max_delta
 from pru.AltitudeProfile import AltitudeProfile, find_level_sections
@@ -18,8 +18,8 @@ from pru.HorizontalPath import HorizontalPath
 from pru.TimeProfile import TimeProfile
 from pru.SmoothedTrajectory import SmoothedTrajectory
 
-DEFAULT_ACROSS_TRACK_TOLERANCE = 0.25
-""" The default across track tolerance in Nautical Miles, 0.25 NM. """
+DEFAULT_ACROSS_TRACK_TOLERANCE = 0.5
+""" The default across track tolerance in Nautical Miles, 0.5 NM. """
 
 MOVING_AVERAGE_SPEED = 'mas'
 
@@ -171,8 +171,11 @@ def find_cruise_positions(num_altitudes, cruise_indicies):
     if cruise_indicies:
         for index in range(0, len(cruise_indicies), 2):
             start = cruise_indicies[index] + 1
-            stop = cruise_indicies[index + 1]
-            cruise_positions[start: stop] = True
+            stop = cruise_indicies[index + 1] - 1
+            if start < stop:
+                cruise_positions[start: stop] = True
+            elif start == stop:
+                cruise_positions[start] = True
 
     return cruise_positions
 
@@ -201,11 +204,12 @@ def calculate_cruise_delta_alts(altitudes, cruise_indicies):
 
     if cruise_indicies:
         for index in range(0, len(cruise_indicies), 2):
-            start = cruise_indicies[index]
-            stop = cruise_indicies[index + 1]
-            cruise_altitude = closest_cruising_altitude(altitudes[start])
-            delta_alts = altitudes[start: stop] - cruise_altitude
-            cruise_deltas = np.append(cruise_deltas, delta_alts)
+            start = cruise_indicies[index] + 1
+            stop = cruise_indicies[index + 1] - 1
+            if start < stop:
+                cruise_altitude = closest_cruising_altitude(altitudes[start])
+                delta_alts = altitudes[start: stop] - cruise_altitude
+                cruise_deltas = np.append(cruise_deltas, delta_alts)
 
     return cruise_deltas
 
@@ -370,30 +374,28 @@ def analyse_speeds(distances, times, duplicate_positions):
 
     max_time_diff: the maximum time difference.
     """
-    # calculate time differences from the first time in seconds
-    elapsed_times = calculate_elapsed_times(times, times[0])
+    # calculate time differences from non-duplicate positions
+    elapsed_times = calculate_elapsed_times(times[~duplicate_positions], times[0])
 
-    # attempt to fit a curve to the distances and times
-    def polynomial_5d(x, a, b, c, d, e, f):
-        return a * x**5 + b * x**4 + c * x**3 + d * x**2 + e * x + f
-    popt, pcov = scipy.optimize.curve_fit(polynomial_5d, distances, elapsed_times,
-                                          method='lm')
+    # dicatnces between non-duplicate positions
+    valid_distances = distances[~duplicate_positions]
 
     # Smooth the times
-    smoothed_times = smooth_times(distances, elapsed_times)
+    smoothed_times = smooth_times(valid_distances, elapsed_times)
 
     # Adjust for any offset introduced by smoothing
     delta_times = smoothed_times - elapsed_times
     mean_delta = np.sum(delta_times) / len(delta_times)
     smoothed_times = smoothed_times - mean_delta
 
+    # Then calculate deltas from the adjusted mean times
     delta_times = smoothed_times - elapsed_times
     time_sd = delta_times.std()
-    max_time_diff = max_delta(delta_times)
+    max_time_diff, max_time_index = find_most_extreme_value(delta_times)
 
     # Don't output duplicate positions in the time profile
-    return TimeProfile(times[0], distances[~duplicate_positions],
-                       smoothed_times[~duplicate_positions]), time_sd, max_time_diff
+    return TimeProfile(times[0], valid_distances, smoothed_times), \
+        time_sd, max_time_diff, max_time_index
 
 
 def analyse_times(distances, times, duplicate_positions, method=LM):
@@ -442,11 +444,11 @@ def analyse_times(distances, times, duplicate_positions, method=LM):
 
     # calculate the maximum time difference
     delta_times = smoothed_times - elapsed_times
-    max_time_diff = max_delta(delta_times)
+    max_time_diff, max_time_index = find_most_extreme_value(delta_times)
 
     # Don't output duplicate positions in the time profile
     return TimeProfile(times[0], valid_distances, smoothed_times), \
-        time_sd, max_time_diff
+        time_sd, max_time_diff, max_time_index
 
 
 def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
@@ -536,7 +538,8 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
     xtds = path.calculate_cross_track_distances(sorted_df['points'].values,
                                                 sorted_path_distances)
     xte_sd = xtds.std()
-    max_xte = max_delta(xtds)
+    max_xte, max_xte_index = find_most_extreme_value(xtds)
+    max_xte = abs(max_xte)
 
     # Find duplicate positions, i.e. postions with across_track_tolerance of each other
     duplicate_positions = find_duplicate_values(sorted_path_distances,
@@ -544,17 +547,19 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
 
     # determine whether to smooth time with speed or scipy cuvre fit
     if method in CURVE_FIT_METHODS:
-        timep, time_sd, max_time_diff = analyse_times(sorted_path_distances,
-                                                      sorted_df['time'].values,
-                                                      duplicate_positions, method)
+        timep, time_sd, max_time_diff, max_time_index = analyse_times(sorted_path_distances,
+                                                                      sorted_df['time'].values,
+                                                                      duplicate_positions, method)
     else:
-        timep, time_sd, max_time_diff = analyse_speeds(sorted_path_distances,
-                                                       sorted_df['time'].values,
-                                                       duplicate_positions)
+        timep, time_sd, max_time_diff, max_time_index = analyse_speeds(sorted_path_distances,
+                                                                       sorted_df['time'].values,
+                                                                       duplicate_positions)
+    max_time_diff = abs(max_time_diff)
 
     altp, alt_sd, max_alt = analyse_altitudes(sorted_path_distances, altitudes,
                                               cruise_indicies)
 
     return SmoothedTrajectory(flight_id, hpath, timep, altp), \
         [flight_id, int(alt_profile_type), position_period, int(unordered),
-         time_sd, max_time_diff, xte_sd, max_xte, alt_sd, max_alt]
+         time_sd, max_time_diff, max_time_index,
+         xte_sd, max_xte, max_xte_index, alt_sd, max_alt]

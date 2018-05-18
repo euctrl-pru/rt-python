@@ -7,6 +7,8 @@ The horizontal path of a smoothed trajectory.
 
 import numpy as np
 import json
+from .ecef_functions import calculate_EcefPoints
+from .EcefPath import EcefPath
 
 
 class HorizontalPath:
@@ -53,3 +55,9 @@ class HorizontalPath:
         lons = np.array(json_data["lons"])
         tids = np.array(json_data["tids"])
         return cls(lats, lons, tids)
+
+    def ecef_path(self):
+        'Construct the EcefPath corresponding to the HorizontalPath'
+        ecef_points = calculate_EcefPoints(self.lats, self.lons)
+        tids_rads = np.deg2rad(self.tids / 60.0)
+        return EcefPath(ecef_points, tids_rads)

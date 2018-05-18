@@ -12,7 +12,7 @@ import csv
 import errno
 import pandas as pd
 from pru.trajectory_analysis import analyse_trajectory, DEFAULT_ACROSS_TRACK_TOLERANCE,\
-    LM
+    MOVING_AVERAGE_SPEED
 from pru.trajectory_fields import POSITION_METRICS_FIELDS, BZ2_FILE_EXTENSION, \
     CSV_FILE_EXTENSION, JSON_FILE_EXTENSION, has_bz2_extension
 from pru.trajectory_files import POSITIONS, TRAJECTORIES, TRAJ_METRICS
@@ -21,13 +21,14 @@ from pru.logger import logger
 
 log = logger(__name__)
 
-LOGGING_COUNT = 500
-""" The number of analysed flights between each log message. """
+DEFAULT_LOGGING_COUNT = 5000
+""" The default number of analysed flights between each log message. """
 
 
 def analyse_position_data(filename,
                           across_track_tolerance=DEFAULT_ACROSS_TRACK_TOLERANCE,
-                          time_method=LM):
+                          time_method=MOVING_AVERAGE_SPEED,
+                          logging_msg_count=DEFAULT_LOGGING_COUNT):
 
     log.info('positions file: %s', filename)
     log.info('across track tolerance: %f NM', across_track_tolerance)
@@ -59,7 +60,7 @@ def analyse_position_data(filename,
             quality_metrics.append(metrics)
 
             flights_count += 1
-            if not (flights_count % LOGGING_COUNT):
+            if not (flights_count % logging_msg_count):
                 log.info('%i flights analysed', flights_count)
 
         except (ValueError, IndexError, TypeError):
@@ -111,7 +112,7 @@ def analyse_position_data(filename,
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Usage: analyse_position_data.py <positions_filename>'
-              ' [across_track_tolerance] [time analysis method]')
+              ' [across_track_tolerance] [time analysis method] [logging_msg_count]')
         sys.exit(errno.EINVAL)
 
     positions_filename = sys.argv[1]
@@ -124,10 +125,15 @@ if __name__ == '__main__':
             log.error('invalid across_track_tolerance: %s', sys.argv[2])
             sys.exit(errno.EINVAL)
 
-    time_method = LM
-    if len(sys.argv) >= 3:
+    time_method = MOVING_AVERAGE_SPEED
+    if len(sys.argv) >= 4:
         time_method = sys.argv[3]
 
-    error_code = analyse_position_data(sys.argv[1], across_track_tolerance, time_method)
+    logging_msg_count = DEFAULT_LOGGING_COUNT
+    if len(sys.argv) >= 5:
+        logging_msg_count = int(sys.argv[4])
+
+    error_code = analyse_position_data(sys.argv[1], across_track_tolerance,
+                                       time_method, logging_msg_count)
     if error_code:
         sys.exit(error_code)

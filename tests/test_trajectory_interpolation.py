@@ -138,16 +138,16 @@ class TestTrajectoryInterpolation(unittest.TestCase):
 
         filename = '/clean_cpr_255332_SAS1643_2017-08-01.csv'
         points_df = pd.read_csv(test_data_home + filename,
-                                parse_dates=['TIME_SOURCE'])
+                                parse_dates=['TIME'])
 
         flight_id = '123-456-7890'
-        across_track_tolerance = 0.25
+        across_track_tolerance = 0.5
         traj, metrics = analyse_trajectory(flight_id, points_df,
                                            across_track_tolerance)
 
         output_df = interpolate_trajectory_positions(traj, DEFAULT_STRAIGHT_INTERVAL,
                                                      DEFAULT_TURN_INTERVAL)
-        self.assertEqual(len(output_df), 1314)
+        self.assertEqual(len(output_df), 805)
 
 
 if __name__ == '__main__':

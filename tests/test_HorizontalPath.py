@@ -45,6 +45,9 @@ class TestHorizontalPath(unittest.TestCase):
         assert_array_almost_equal(traj_1.lons, traj_0.lons)
         assert_array_almost_equal(traj_1.tids, traj_0.tids)
 
+        ecef_path_1 = traj_1.ecef_path()
+        self.assertEqual(len(ecef_path_1), len(ROUTE_LATS))
+
 
 if __name__ == '__main__':
     unittest.main()

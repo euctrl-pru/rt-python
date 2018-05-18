@@ -83,9 +83,10 @@ class TestTrajectorySmoothing(unittest.TestCase):
 
     def test_find_cruise_positions(self):
 
-        cruise_positions = [False, True, True, True,
-                            True, False, False, False,
-                            False, False, True, False]
+        cruise_positions = [False, True, True,
+                            True, False, False,
+                            False, False, False,
+                            False, True, False]
 
         cruise_indicies = find_cruise_sections(TEST_ALTITUDES)
         results = find_cruise_positions(len(TEST_ALTITUDES), cruise_indicies)
@@ -93,8 +94,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
 
     def test_calculate_cruise_delta_alts(self):
 
-        cruise_delta_alts = [200.0, 200.0, 200.0,
-                             -200.0, -200.0, 0.0, 0.0]
+        cruise_delta_alts = [200.0, 200.0, -200.0]
 
         cruise_indicies = find_cruise_sections(TEST_ALTITUDES)
         results = calculate_cruise_delta_alts(TEST_ALTITUDES, cruise_indicies)
@@ -129,7 +129,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
 
         altp, alt_sd, max_alt = analyse_altitudes(DISTANCES, ALTITUDES, cruise_indicies)
 
-        self.assertEqual(len(altp.altitudes), len(ALTITUDES) - 2)
+        self.assertEqual(len(altp.altitudes), len(ALTITUDES) - 1)
 
     def test_analyse_trajectory_1(self):
         test_data_home = env.get('TEST_DATA_HOME')

@@ -23,7 +23,7 @@ class TestTrajectoryCleaning(unittest.TestCase):
         # different aircraft address
         filename_1 = '/cpr_259599_BAW307_2017-08-01.csv'
         points_df = pd.read_csv(test_data_home + filename_1,
-                                parse_dates=['TIME_SOURCE'])
+                                parse_dates=['TIME'])
 
         # Test position search
         invalid_pos0, metrics0 = find_invalid_positions(points_df,
@@ -52,7 +52,7 @@ class TestTrajectoryCleaning(unittest.TestCase):
         # with different SSR codes and aircraft addresses
         filename_1 = '/cpr_255332_SAS1643_2017-08-01.csv'
         points_df = pd.read_csv(test_data_home + filename_1,
-                                parse_dates=['TIME_SOURCE'])
+                                parse_dates=['TIME'])
 
         # Test position search
         invalid_pos0, metrics0 = find_invalid_positions(points_df,

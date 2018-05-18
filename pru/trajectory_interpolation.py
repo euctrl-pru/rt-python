@@ -11,6 +11,7 @@ from .EcefPath import PointType, EcefPath
 from .ecef_functions import calculate_EcefPoints, calculate_LatLongs
 from .trajectory_functions import calculate_date_times, calculate_speed, \
     calculate_vertical_speed, convert_angle_to_track_angle
+from .trajectory_analysis import find_level_sections
 from .trajectory_fields import POSITION_FIELDS
 
 DEFAULT_STRAIGHT_INTERVAL = 5.0
@@ -43,6 +44,8 @@ def interpolate_altitude_profile(altp, distances):
     alts : float array
         The interpolated altitudes at the given distances.
     """
+    cruise_indicies = find_level_sections(altp.altitudes)
+
     cs = CubicSpline(altp.distances, altp.altitudes)
     return cs(distances)
 
@@ -218,10 +221,8 @@ def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interv
     positions: a pandas DataFrame
         The interpolated trajectory positions.
     """
-    # Convert the HorizontalPath into an EcefPath
-    ecef_points = calculate_EcefPoints(smooth_traj.path.lats, smooth_traj.path.lons)
-    tids = np.deg2rad(smooth_traj.path.tids / 60.0)
-    ecef_path = EcefPath(ecef_points, tids)
+    # Construct the EcefPath corresponding to the HorizontalPath
+    ecef_path = smooth_traj.path.ecef_path()
 
     # Get the turn point distances from ecef_path
     point_distances, point_types = ecef_path.section_distances_and_types()
