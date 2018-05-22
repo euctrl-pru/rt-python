@@ -304,6 +304,16 @@ class TestTrajectoryFunctions(unittest.TestCase):
                                                       alts1, alts1, time_threshold=60.0,
                                                       speed_threshold=750.0))
 
+    def test_set_exit_flags(self):
+        """Test the set_exit_flags function."""
+        ids_1 = ['A', 'A', 'B', 'C', 'C', 'C', 'A', 'A', 'A', 'A']
+        exits = np.array([False, True, False, False, True, False, False, True, False, True])
+
+        result = set_exit_flags(ids_1)
+        assert_array_almost_equal(result, exits)
+        # print(exits.tolist())
+        # self.assertFalse(exits[0])
+
 
 if __name__ == '__main__':
     unittest.main()

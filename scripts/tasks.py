@@ -17,15 +17,17 @@ from pru.filesystem.data_store_operations import SOURCES_CPR, SOURCES_FR24, SOUR
     SOURCES, MERGED, DAILY_CPR_FR24, PRODUCTS, PRODUCTS_FLEET, AIRPORTS, \
     SOURCES_MERGED_DAILY_CPR_FR24, SOURCES_MERGED_DAILY_CPR_FR24_IDS, \
     SOURCES_MERGED_OVERNIGHT_CPR_FR24, SOURCES_MERGED_OVERNIGHT_CPR_FR24_IDS, \
-    PRODUCTS_ERROR_METRICS_CPR_FR24_OVERNIGHT, \
+    PRODUCTS_ERROR_METRICS_CPR_FR24_OVERNIGHT, PRODUCTS_INTERSECTIONS_SECTOR, \
+    PRODUCTS_INTERSECTIONS_AIRPORT, PRODUCTS_INTERSECTIONS_USER, \
     SOURCES_MERGED_APDS_CPR_FR24, SOURCES_MERGED_APDS_CPR_FR24_IDS, \
     path_exists, get_unprocessed, put_processed, get_processed, \
     get_airports, get_apds, get_stands, AIRPORTS_STANDS
 from pru.trajectory_fields import iso8601_previous_day, split_dual_date, \
-    CSV_FILE_EXTENSION, JSON_FILE_EXTENSION
+    read_iso8601_date_string, CSV_FILE_EXTENSION, JSON_FILE_EXTENSION
 from pru.trajectory_files import DEFAULT_AIRPORTS_FILENAME, DEFAULT_STANDS_FILENAME, \
     APDS, CPR, FR24, CPR_FR24, PREV_DAY, NEW, REF, RAW_CPR_FR24, ERROR_METRICS, \
     TRAJECTORIES, TRAJ_METRICS, REF_POSITIONS, \
+    SECTOR_INTERSECTIONS, AIRPORT_INTERSECTIONS, USER_INTERSECTIONS, \
     create_original_cpr_filename, create_original_fr24_data_filenames, \
     create_flights_filename, create_positions_filename, \
     create_convert_cpr_filenames, create_convert_fr24_filenames, \
@@ -41,8 +43,9 @@ from pru.trajectory_files import DEFAULT_AIRPORTS_FILENAME, DEFAULT_STANDS_FILEN
     create_match_apds_input_filenames, \
     create_merge_apds_input_filenames, create_merge_apds_output_filenames
 from pru.trajectory_cleaning import DEFAULT_MAX_SPEED, DEFAULT_DISTANCE_ACCURACY
-from pru.trajectory_analysis import DEFAULT_ACROSS_TRACK_TOLERANCE, LM
+from pru.trajectory_analysis import DEFAULT_ACROSS_TRACK_TOLERANCE, MOVING_AVERAGE_SPEED
 from pru.trajectory_interpolation import DEFAULT_STRAIGHT_INTERVAL, DEFAULT_TURN_INTERVAL
+from pru.trajectory_airport_intersections import DEFAULT_RADIUS
 
 from apps.convert_cpr_data import convert_cpr_data
 from apps.convert_fr24_data import convert_fr24_data
@@ -58,9 +61,12 @@ from apps.merge_consecutive_day_trajectories import merge_consecutive_day_trajec
 from apps.match_apt_trajectories import match_apds_trajectories
 from apps.merge_apt_trajectories import merge_apds_trajectories
 
-
 from apps.analyse_position_data import analyse_position_data
 from apps.interpolate_trajectories import interpolate_trajectories
+
+from apps.find_sector_intersections import find_sector_intersections
+from apps.find_airport_intersections import find_airport_intersections
+from apps.find_user_airspace_intersections import find_user_airspace_intersections
 
 from pru.logger import logger
 
@@ -412,7 +418,7 @@ def clean_overnight_cpr_fr24_positions(date, max_speed=DEFAULT_MAX_SPEED,
 
 def analyse_positions_on_date(date, source=CPR_FR24, *,
                               distance_tolerance=DEFAULT_ACROSS_TRACK_TOLERANCE,
-                              method=LM):
+                              method=MOVING_AVERAGE_SPEED):
     """
     Analyse refined CPR and FR24 ADS-B data for the given date.
 
@@ -633,3 +639,80 @@ def merge_apds_trajectories_on_day(from_date, to_date, date):
         [os.remove(file_path) for file_path in output_filenames]
 
     return ok
+
+
+def find_trajectory_sector_intersections(trajectory_filename, source=CPR_FR24):
+    """
+    """
+    if not path_exists(trajectory_filename):
+        source_path = '/'.join([PRODUCTS, TRAJECTORIES, source])
+        log.debug("Getting trajectory file: %s", trajectory_filename)
+        if not get_processed(source_path, [trajectory_filename]):
+            log.error('Trajectory file not found in%s bucket', source_path)
+            return False
+
+    log.info("find_sector_intersections for: %s", trajectory_filename)
+    if find_sector_intersections(trajectory_filename):
+        return False
+
+    output_filename = trajectory_filename.replace(TRAJECTORIES, SECTOR_INTERSECTIONS)
+    output_filename = output_filename.replace(JSON_FILE_EXTENSION,
+                                              CSV_FILE_EXTENSION)
+
+    intersections_path = '/'.join([PRODUCTS_INTERSECTIONS_SECTOR, source])
+    return put_processed(intersections_path, [output_filename])
+
+
+def find_trajectory_airport_intersections(trajectory_filename, source=CPR_FR24,
+                                          radius=DEFAULT_RADIUS):
+    """
+    """
+    if not path_exists(trajectory_filename):
+        source_path = '/'.join([PRODUCTS, TRAJECTORIES, source])
+        log.debug("Getting trajectory file: %s", trajectory_filename)
+        if not get_processed(source_path, [trajectory_filename]):
+            log.error('Trajectory file not found in %s bucket', source_path)
+            return False
+
+    date = read_iso8601_date_string(trajectory_filename, is_json=True)
+    flights_filename = create_flights_filename(source, date)
+    if not path_exists(flights_filename):
+        source_path = SOURCES_MERGED_OVERNIGHT_CPR_FR24 \
+            if (source == CPR_FR24) else '/'.join([SOURCES, source])
+        if not get_processed(source_path, [flights_filename]):
+            log.error('Flights file not found in %s bucket', source_path)
+            return False
+
+    log.info("find_sector_intersections for: %s and %s",
+             flights_filename, trajectory_filename)
+    if find_airport_intersections(flights_filename, trajectory_filename, radius):
+        return False
+
+    output_filename = trajectory_filename.replace(TRAJECTORIES, AIRPORT_INTERSECTIONS)
+    output_filename = output_filename.replace(JSON_FILE_EXTENSION,
+                                              CSV_FILE_EXTENSION)
+
+    intersections_path = '/'.join([PRODUCTS_INTERSECTIONS_AIRPORT, source])
+    return put_processed(intersections_path, [output_filename])
+
+
+def find_trajectory_user_airspace_intersections(trajectory_filename, source=CPR_FR24):
+    """
+    """
+    if not path_exists(trajectory_filename):
+        source_path = '/'.join([PRODUCTS, TRAJECTORIES, source])
+        log.debug("Getting trajectory file: %s", trajectory_filename)
+        if not get_processed(source_path, [trajectory_filename]):
+            log.error('Trajectory file not found in %s bucket', source_path)
+            return False
+
+    log.info("find_user_airspace_intersections for: %s", trajectory_filename)
+    if find_user_airspace_intersections(trajectory_filename):
+        return False
+
+    output_filename = trajectory_filename.replace(TRAJECTORIES, USER_INTERSECTIONS)
+    output_filename = output_filename.replace(JSON_FILE_EXTENSION,
+                                              CSV_FILE_EXTENSION)
+
+    intersections_path = '/'.join([PRODUCTS_INTERSECTIONS_USER, source])
+    return put_processed(intersections_path, [output_filename])

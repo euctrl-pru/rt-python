@@ -15,6 +15,9 @@ DEFAULT_AIRPORTS_FILENAME = 'airports.csv'
 DEFAULT_STANDS_FILENAME = 'stands_EGLL.csv'
 """ A file airport stand positions for convert_apt_data.py. """
 
+DEFAULT_AIRSPACES_FILENAME = 'ES_428.geojson'
+""" A file containing elementary airspace sectors. """
+
 # Data file sources
 APDS = "apds"
 CPR = 'cpr'
@@ -36,6 +39,12 @@ MATCHING_IDS = 'matching_ids'
 TRAJECTORIES = 'trajectories'
 TRAJ_METRICS = 'traj_metrics'
 REF_POSITIONS = 'ref_positions'
+
+INTERSECTIONS = 'intersections'
+SECTOR = 'sector'
+AIRPORT = 'airport'
+USER = 'user'
+
 SECTOR_INTERSECTIONS = 'sector_intersections'
 AIRPORT_INTERSECTIONS = 'airport_intersections'
 USER_INTERSECTIONS = 'user_intersections'

@@ -393,3 +393,32 @@ def compare_trajectory_positions(a_times, b_times, a_points, b_points,
             return False
 
     return (distance <= distance_threshold) and (delta_alt <= alt_threshold)
+
+
+def set_exit_flags(ids):
+    """
+    Set flags corresponding to the input list.
+
+    Parameters
+    ----------
+    ids: ids array
+        An array of ids.
+
+    Returns
+    -------
+    A numpy boolean array with each value set for the second consecutive
+    occurance of an id.
+    """
+    is_exits = np.zeros(len(ids), dtype=np.bool)
+    if len(ids):
+        last_id = ''
+        count = 0
+        for i, id in enumerate(ids):
+            if last_id == id:
+                count += 1
+                is_exits[i] = count % 2
+            else:
+                last_id = id
+                count = 0
+
+    return is_exits

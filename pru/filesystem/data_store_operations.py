@@ -20,7 +20,8 @@ from pru.env.env_constants import DATA_HOME, UPLOAD_DIR, BACKUPS_DIR, NOTEBOOK_H
 from pru.trajectory_fields import BZ2_FILE_EXTENSION, \
     has_bz2_extension, is_valid_iso8601_date, compact_date
 from pru.trajectory_files import APDS, CPR, FR24, CPR_FR24, APDS_CPR_FR24, IDS, \
-    FLEET_DATA, ERROR_METRICS, TRAJECTORIES, TRAJ_METRICS, REF_POSITIONS
+    FLEET_DATA, ERROR_METRICS, TRAJECTORIES, TRAJ_METRICS, REF_POSITIONS, \
+    INTERSECTIONS, SECTOR, AIRPORT, USER
 from pru.logger import logger
 
 log = logger(__name__)
@@ -81,10 +82,26 @@ PRODUCTS_REF_POSITIONS_CPR = '/'.join([PRODUCTS, REF_POSITIONS, CPR])
 PRODUCTS_REF_POSITIONS_FR24 = '/'.join([PRODUCTS, REF_POSITIONS, FR24])
 PRODUCTS_REF_POSITIONS_CPR_FR24 = '/'.join([PRODUCTS, REF_POSITIONS, CPR_FR24])
 
+PRODUCTS_INTERSECTIONS_SECTOR = '/'.join([PRODUCTS, INTERSECTIONS, SECTOR])
+PRODUCTS_INTERSECTIONS_SECTOR_CPR = '/'.join([PRODUCTS_INTERSECTIONS_SECTOR, CPR])
+PRODUCTS_INTERSECTIONS_SECTOR_FR24 = '/'.join([PRODUCTS_INTERSECTIONS_SECTOR, FR24])
+PRODUCTS_INTERSECTIONS_SECTOR_CPR_FR24 = '/'.join([PRODUCTS_INTERSECTIONS_SECTOR, CPR_FR24])
+
+PRODUCTS_INTERSECTIONS_AIRPORT = '/'.join([PRODUCTS, INTERSECTIONS, AIRPORT])
+PRODUCTS_INTERSECTIONS_AIRPORT_CPR = '/'.join([PRODUCTS_INTERSECTIONS_AIRPORT, CPR])
+PRODUCTS_INTERSECTIONS_AIRPORT_FR24 = '/'.join([PRODUCTS_INTERSECTIONS_AIRPORT, FR24])
+PRODUCTS_INTERSECTIONS_AIRPORT_CPR_FR24 = '/'.join([PRODUCTS_INTERSECTIONS_AIRPORT, CPR_FR24])
+
+PRODUCTS_INTERSECTIONS_USER = '/'.join([PRODUCTS, INTERSECTIONS, USER])
+PRODUCTS_INTERSECTIONS_USER_CPR = '/'.join([PRODUCTS_INTERSECTIONS_USER, CPR])
+PRODUCTS_INTERSECTIONS_USER_FR24 = '/'.join([PRODUCTS_INTERSECTIONS_USER, FR24])
+PRODUCTS_INTERSECTIONS_USER_CPR_FR24 = '/'.join([PRODUCTS_INTERSECTIONS_USER, CPR_FR24])
+
 # Supported unprocessed data types
 AIRPORTS = "airports"
 STANDS = "stands"
 AIRPORTS_STANDS = '/'.join([AIRPORTS, STANDS])
+AIRSPACES = "airspaces"
 
 # The set of valid data types
 VALID_DATA_TYPES = {APDS, CPR, FR24, CPR_FR24, SOURCES_CPR, SOURCES_FR24, SOURCES_APDS,
@@ -97,7 +114,11 @@ VALID_DATA_TYPES = {APDS, CPR, FR24, CPR_FR24, SOURCES_CPR, SOURCES_FR24, SOURCE
                     PRODUCTS_TRAJECTORIES_FR24, PRODUCTS_TRAJ_METRICS_FR24,
                     PRODUCTS_TRAJECTORIES_CPR_FR24, PRODUCTS_TRAJ_METRICS_CPR_FR24,
                     PRODUCTS_REF_POSITIONS_CPR, PRODUCTS_REF_POSITIONS_FR24,
-                    PRODUCTS_REF_POSITIONS_CPR_FR24}
+                    PRODUCTS_REF_POSITIONS_CPR_FR24, PRODUCTS_INTERSECTIONS_SECTOR_CPR,
+                    PRODUCTS_INTERSECTIONS_SECTOR_FR24, PRODUCTS_INTERSECTIONS_SECTOR_CPR_FR24,
+                    PRODUCTS_INTERSECTIONS_AIRPORT_CPR, PRODUCTS_INTERSECTIONS_AIRPORT_FR24,
+                    PRODUCTS_INTERSECTIONS_AIRPORT_CPR_FR24, PRODUCTS_INTERSECTIONS_USER_CPR,
+                    PRODUCTS_INTERSECTIONS_USER_FR24, PRODUCTS_INTERSECTIONS_USER_CPR_FR24}
 
 
 # Supported location types
@@ -257,6 +278,42 @@ def get_unprocessed(data_type, data_date, local_path_string=UPLOAD_DIR):
         return error_message
 
 
+def get_airspaces(airspaces_file_name, local_path_string=DATA_HOME):
+    """
+    Gets the airspaces descriptions required to support data processing.
+    The data source location and file name is fixed.
+
+    Parameters
+    ----------
+    local_path_string is defaulted to the known local airspaces data location.
+    """
+    destination_path = '/'.join([local_path_string, AIRSPACES])
+    objects = list_bucket_objects(AIRSPACES)
+    filtered_objects = [obj for obj in objects if airspaces_file_name in obj.name]
+    log.debug("Getting airspaces file: " + str(filtered_objects) + " to: " +
+              destination_path)
+    copy_from_bucket(filtered_objects, destination_path)
+    return destination_path
+
+
+def get_user_airspaces(user_airspaces_file_name, local_path_string=DATA_HOME):
+    """
+    Gets the user airspaces descriptions required to support data processing.
+    The data source location and file name is fixed.
+
+    Parameters
+    ----------
+    local_path_string is defaulted to the known local user airspaces data location.
+    """
+    destination_path = '/'.join([local_path_string, AIRSPACES])
+    objects = list_bucket_objects(AIRSPACES)
+    filtered_objects = [obj for obj in objects if user_airspaces_file_name in obj.name]
+    log.debug("Getting user airspaces file: " + str(filtered_objects) + " to: " +
+              destination_path)
+    copy_from_bucket(filtered_objects, destination_path)
+    return destination_path
+
+
 def get_airports(airports_file_name, local_path_string=DATA_HOME):
     """
     Gets the airports descriptions required to support data processing.
@@ -272,6 +329,7 @@ def get_airports(airports_file_name, local_path_string=DATA_HOME):
     log.debug("Getting airports file: " + str(filtered_objects) + " to: " +
               destination_path)
     copy_from_bucket(filtered_objects, destination_path)
+    return destination_path
 
 
 def get_stands(stands_file_name, local_path_string=DATA_HOME):
@@ -289,6 +347,7 @@ def get_stands(stands_file_name, local_path_string=DATA_HOME):
     log.debug("Getting stands file: " + str(filtered_objects) + " to: " +
               destination_path)
     copy_from_bucket(filtered_objects, destination_path)
+    return destination_path
 
 
 def get_apds(apds_filename, local_path_string=UPLOAD_DIR):
@@ -308,6 +367,7 @@ def get_apds(apds_filename, local_path_string=UPLOAD_DIR):
     log.debug("Getting apds file: " + str(filtered_objects) + " to: " +
               destination_path)
     copy_from_bucket(filtered_objects, destination_path)
+    return destination_path
 
 
 def put_processed(data_type, local_path_strings):
