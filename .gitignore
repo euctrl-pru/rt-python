@@ -3,4 +3,7 @@
 pru/__pycache__/
 apps/__pycache__/
 tests/__pycache__/
+tests/__pycache__/
 tools/__pycache__/
+tools/analysis/__pycache__/
+*__pycache__/

@@ -6,9 +6,7 @@
 # Kubernetes image yaml configuration file.
 
 """
-    Environmental constants.  Provides a layer over the environment vars.
-    The reload function allows these vars to be updated as would be required
-    in unit testing.
+    Environmental constants.
 """
 
 from os import environ as env
@@ -79,48 +77,3 @@ MESSAGE_SERVER_PASSWORD = env.get(MESSAGE_SERVER_PASSWORD_ENV)
 # Cluster envs
 COMPUTE_ENGINE_SERVICE_ACCOUNT = env.get(COMPUTE_ENGINE_SERVICE_ACCOUNT_ENV)
 PEM_FILE = env.get(PEM_FILE_ENV)
-
-
-def reload():
-    """
-        Reload the above - may be used in testing
-    """
-    # Project configuration
-    global PROJECT_NAME, BUCKET_NAME, PROJECT_HOME, PRU_HOME, DATA_HOME
-    global NOTEBOOK_HOME
-    global SHARED_HOME, LOGGER_HOME, AIRPORTS_DIR, AIRSPACES_DIR
-    global BACKUPS_DIR, BUSINESS_LOGS_DIR
-    global UPLOAD_DIR
-    global JUPYTERHUB_USER, PYTHONPATH, MESSAGE_SERVER_PORT, MESSAGE_SERVER_HOST
-    global COMPUTE_ENGINE_SERVICE_ACCOUNT, PEM_FILE, MESSAGE_SERVER_USER
-    global MESSAGE_SERVER_PASSWORD
-
-    PROJECT_NAME = env.get(PROJECT_NAME_ENV)
-    BUCKET_NAME = env.get(BUCKET_NAME_ENV)
-    PROJECT_HOME = env.get(PROJECT_HOME_ENV)
-    PRU_HOME = env.get(PRU_HOME_ENV)
-    DATA_HOME = env.get(DATA_HOME_ENV)
-    SHARED_HOME = env.get(SHARED_HOME_ENV)
-    LOGGER_HOME = env.get(LOGGER_HOME_ENV)
-    NOTEBOOK_HOME = env.get(NOTEBOOK_HOME_ENV)
-
-    # Data related
-    AIRPORTS_DIR = env.get(AIRPORTS_ENV)
-    AIRSPACES_DIR = env.get(AIRSPACES_ENV)
-    BACKUPS_DIR = env.get(BACKUPS_ENV)
-    BUSINESS_LOGS_DIR = env.get(BUSINESS_LOGS_ENV)
-    UPLOAD_DIR = env.get(UPLOAD_ENV)
-
-    # Jupyterhub specific values
-    JUPYTERHUB_USER = env.get(JUPYTERHUB_USER_ENV)
-
-    PYTHONPATH = env.get(PYTHONPATH_ENV)
-
-    MESSAGE_SERVER_PORT = env.get(MESSAGE_SERVER_PORT_ENV)
-    MESSAGE_SERVER_HOST = env.get(MESSAGE_SERVER_HOST_ENV)
-    MESSAGE_SERVER_USER = env.get(MESSAGE_SERVER_USER_ENV)
-    MESSAGE_SERVER_PASSWORD = env.get(MESSAGE_SERVER_PASSWORD_ENV)
-
-    # Project related
-    COMPUTE_ENGINE_SERVICE_ACCOUNT = env.get(COMPUTE_ENGINE_SERVICE_ACCOUNT_ENV)
-    PEM_FILE = env.get(PEM_FILE_ENV)
