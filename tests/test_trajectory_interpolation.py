@@ -52,15 +52,6 @@ DISTANCES = np.array([0., 27.171707 * NM, 76.922726 * NM,
 
 class TestTrajectoryInterpolation(unittest.TestCase):
 
-    def test_interpolate_altitude_profile(self):
-        profile = AltitudeProfile(DISTANCES, ALTITUDES)
-
-        distances_0 = np.array([0., 20.0 * NM, 50.0 * NM, DISTANCES[2]])
-        alts_0 = interpolate_altitude_profile(profile, distances_0)
-        self.assertEqual(len(alts_0), len(distances_0))
-        self.assertEqual(alts_0[0], ALTITUDES[0])
-        self.assertEqual(alts_0[-1], ALTITUDES[2])
-
     def test_interpolate_time_profile_by_distance(self):
         profile = TimeProfile(TIMES[0], DISTANCES, ELAPSED_TIMES)
 

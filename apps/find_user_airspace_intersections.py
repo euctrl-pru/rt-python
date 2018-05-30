@@ -45,8 +45,11 @@ def find_user_airspace_intersections(filename):
         try:
             flight_id = smooth_traj.flight_id
             sect_ints = find_trajectory_user_airspace_intersections(smooth_traj)
-            sector_intersections = pd.concat([sector_intersections, sect_ints],
-                                             ignore_index=True)
+            if sect_ints.empty:
+                log.warn('no intersections found with flight: %s', flight_id)
+            else:
+                sector_intersections = pd.concat([sector_intersections, sect_ints],
+                                                 ignore_index=True)
         except ValueError:
             log.exception('find_trajectory_user_airspace_intersections id: %s', flight_id)
 

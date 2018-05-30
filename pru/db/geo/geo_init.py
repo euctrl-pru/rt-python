@@ -266,8 +266,8 @@ def add_airspace_geometry(airspace, context, connection):
                       'to airspace table - DataError.')
         return False
     except ValueError:
-        log.exception('Failed to add airspace record ' + str(airspace) +
-                      'to airspace table - ValueError.')
+        log.warning('Failed to add airspace record ' + str(airspace) +
+                    'to airspace table - ValueError.')
         return False
     except InternalError:
         log.exception('Failed to add airspace record ' + str(airspace) +
@@ -313,15 +313,27 @@ def add_airport(airport, context, connection):
     Adds an airport description to the airport table.
     """
     schema_name = AsIs(context[ctx.SCHEMA_NAME])
+    # Deal with both the movements style airport and the full fat airport record
     try:
-        with connection.cursor() as cursor:
-            cursor.execute("INSERT INTO %s.airports (iata_ap_code, "
-                           "icao_ap_code, iso_ct_code, latitude, "
-                           "longitude) VALUES "
-                           "(%s, %s, %s, %s, %s) RETURNING id;",
-                           (schema_name, airport[0], airport[1], airport[2],
-                            float(airport[3]), float(airport[4])))
-            id = cursor.fetchone()[0]
+        if len(airport) > 3:
+            # Assume its the full fat record.
+            with connection.cursor() as cursor:
+                cursor.execute("INSERT INTO %s.airports (iata_ap_code, "
+                               "icao_ap_code, iso_ct_code, latitude, "
+                               "longitude) VALUES "
+                               "(%s, %s, %s, %s, %s) RETURNING id;",
+                               (schema_name, airport[0], airport[1], airport[2],
+                                float(airport[3]), float(airport[4])))
+                id = cursor.fetchone()[0]
+        else:
+            # Assume its the skinny record
+            with connection.cursor() as cursor:
+                cursor.execute("INSERT INTO %s.airports (icao_ap_code, "
+                               "longitude, latitude) VALUES "
+                               "(%s, %s, %s) RETURNING id;",
+                               (schema_name, airport[0],
+                                float(airport[1]), float(airport[2])))
+                id = cursor.fetchone()[0]
     except DataError:
         log.exception('Failed to add airport record ' + str(airport) +
                       'to airport table - DataError.')
@@ -425,8 +437,11 @@ def create_GIST_index(context, connection):
     """
     cursor = connection.cursor()
     schema_name = AsIs(context[ctx.SCHEMA_NAME])
-    cursor.execute("CREATE INDEX sector_index ON unit.sectors USING GIST"
-                   "(wkt gist_geometry_ops_nd);", schema_name)
+    try:
+        cursor.execute("CREATE INDEX sector_index ON unit.sectors USING GIST"
+                       "(wkt gist_geometry_ops_nd);", schema_name)
+    except ProgrammingError:
+        log.warning("Failed to add index, already present.")
 
 
 def load_user_airspace(user_sectors_file, context, connection):

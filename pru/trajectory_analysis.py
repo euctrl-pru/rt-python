@@ -13,7 +13,9 @@ from pru.horizontal_path_functions import derive_horizontal_path
 from pru.ecef_functions import calculate_EcefPoints, find_most_extreme_value
 from pru.trajectory_functions import calculate_delta_time, calculate_elapsed_times, \
     calculate_speed, find_duplicate_values, max_delta
-from pru.AltitudeProfile import AltitudeProfile, find_level_sections
+from pru.AltitudeProfile import AltitudeProfile, AltitudeProfileType, \
+    closest_cruising_altitude, find_cruise_sections, find_cruise_positions, \
+    set_cruise_altitudes, classify_altitude_profile
 from pru.HorizontalPath import HorizontalPath
 from pru.TimeProfile import TimeProfile
 from pru.SmoothedTrajectory import SmoothedTrajectory
@@ -29,155 +31,6 @@ DOGBOX = 'dogbox'
 
 # The set of valid curve fit methods
 CURVE_FIT_METHODS = {LM, TRF, DOGBOX}
-
-
-@unique
-class AltitudeProfileType(IntEnum):
-    """The types of altitude profile."""
-    CRUISING = 0
-    CLIMBING = 1
-    DESCENDING = 2
-    CLIMBING_AND_DESCENDING = 3
-
-
-def closest_cruising_altitude(altitude):
-    """
-    Calculate the closest cruising altitude to the given altitude.
-
-    Parameters
-    ----------
-    altitude: float
-        An altitude [feet]
-
-    Returns
-    -------
-    The closest cruising altitude to the given altitude.
-    """
-    return 1000 * ((altitude + 500) // 1000)
-
-
-def is_cruising(altitude, cruise_altitude=None):
-    """
-    Determine whether an altitude may be a cruising altitude.
-
-    Parameters
-    ----------
-    altitude: float
-        An altitude [feet]
-
-    cruise_altitude: float
-        A cruise altitude [feet], default None.
-        If None, closest_cruising_altitude is called to calculate the
-        nearest cruising altitude.
-
-    Returns
-    -------
-    True if the altitiude is within tolerance of the cruising altitude,
-    False otherwise.
-    """
-    if cruise_altitude is None:
-        cruise_altitude = closest_cruising_altitude(altitude)
-    return abs(altitude - cruise_altitude) <= 200
-
-
-def in_cruise_level_range(altitudes, cruise_altitude):
-    """
-    Determine whether an altitude range may be at a cruising altitude.
-
-    Parameters
-    ----------
-    altitudes: float array
-        An array of altitudes[feet]
-
-    cruise_altitude: float
-        The cruise altitude [feet].
-
-    Returns
-    -------
-    True if all altitiudes are within tolerance of the cruising altitude,
-    False otherwise.
-    """
-    return is_cruising(altitudes, cruise_altitude).all()
-
-
-def find_cruise_sections(altitudes):
-    """
-    Find pairs of start/finish indicies of altitudes where an aircraft was cruising.
-
-    Parameters
-    ----------
-    altitudes: float array
-        An array of altitudes[feet]
-
-    Returns
-    -------
-    cruise_indicies: a list of indicies of the starts and finishes of
-    cruising sections.
-    """
-    indicies = find_level_sections(altitudes)
-
-    if indicies:
-        prev_altitude = altitudes[indicies[0]]
-        cruise_altitude = closest_cruising_altitude(prev_altitude)
-        was_cruising = is_cruising(prev_altitude, cruise_altitude)
-        prev_altitude = cruise_altitude if was_cruising else prev_altitude
-
-        merge_indicies = []
-        for index in range(2, len(indicies), 2):
-            altitude = altitudes[indicies[index]]
-            cruise_altitude = closest_cruising_altitude(altitude)
-            if is_cruising(altitude, cruise_altitude):
-                # If the aircraft cruised between the level ranges,
-                if was_cruising and (prev_altitude == cruise_altitude) and \
-                    in_cruise_level_range(altitudes[indicies[index - 1] + 1: indicies[index]],
-                                          cruise_altitude):
-                    # merge the level indicies
-                    merge_indicies.append(index - 1)
-                    merge_indicies.append(index)
-
-                prev_altitude = cruise_altitude
-                was_cruising = True
-            else:
-                prev_altitude = altitude
-                was_cruising = False
-
-        # merge the level indicies
-        while merge_indicies:
-            index = merge_indicies.pop()
-            del indicies[index]
-
-    return indicies
-
-
-def find_cruise_positions(num_altitudes, cruise_indicies):
-    """
-    Create a numpy boolean array with all positions inbetween the starts and
-    finishes of cruising sections marked as True.
-
-    Note: the starts and finish positions of cruising sections are marked False.
-
-    Parameters
-    ----------
-    cruise_indicies: a list of indicies of the starts and finishes of
-    cruising sections.
-
-    Returns
-    -------
-    cruise_positions: boolean array
-        An array of booleans of cruising positions (i.e. duplicates).
-    """
-    cruise_positions = np.zeros(num_altitudes, dtype=bool)
-
-    if cruise_indicies:
-        for index in range(0, len(cruise_indicies), 2):
-            start = cruise_indicies[index] + 1
-            stop = cruise_indicies[index + 1] - 1
-            if start < stop:
-                cruise_positions[start: stop] = True
-            elif start == stop:
-                cruise_positions[start] = True
-
-    return cruise_positions
 
 
 def calculate_cruise_delta_alts(altitudes, cruise_indicies):
@@ -205,42 +58,13 @@ def calculate_cruise_delta_alts(altitudes, cruise_indicies):
     if cruise_indicies:
         for index in range(0, len(cruise_indicies), 2):
             start = cruise_indicies[index] + 1
-            stop = cruise_indicies[index + 1] - 1
+            stop = cruise_indicies[index + 1]
             if start < stop:
                 cruise_altitude = closest_cruising_altitude(altitudes[start])
                 delta_alts = altitudes[start: stop] - cruise_altitude
                 cruise_deltas = np.append(cruise_deltas, delta_alts)
 
     return cruise_deltas
-
-
-def classify_altitude_profile(altitudes, cruise_indicies):
-    """
-    Classify an altitude profile based upon the altitudes and cruise_indicies.
-
-    Parameters
-    ----------
-    altitudes: int array
-        An array of altitudes.
-
-    Returns
-    -------
-    The AltitudeProfileType of the altitudes.
-    """
-    # only cruising if cruising over the whole trajectory
-    if (len(cruise_indicies) == 2) and \
-        (cruise_indicies[0] == 0) and \
-            (cruise_indicies[-1] == len(altitudes) - 1):
-        return AltitudeProfileType.CRUISING
-    else:
-        max_alt = altitudes.max()
-        has_climb = (max_alt > altitudes[0])
-        has_descent = (max_alt > altitudes[-1])
-        if has_climb != has_descent:
-            return AltitudeProfileType.CLIMBING if has_climb \
-                else AltitudeProfileType.DESCENDING
-
-    return AltitudeProfileType.CLIMBING_AND_DESCENDING
 
 
 def analyse_altitudes(distances, altitudes, cruise_indicies):
@@ -276,8 +100,10 @@ def analyse_altitudes(distances, altitudes, cruise_indicies):
         alt_sd = cruise_delta_alts.std()
         max_alt = max_delta(cruise_delta_alts)
 
-    # Only keep climbing and descending sections
+    # Only keep climbing and descending sections and ensure that cruise altitudes
+    # are at cruising flight levels
     cruise_positions = find_cruise_positions(len(altitudes), cruise_indicies)
+    altitudes = set_cruise_altitudes(altitudes, cruise_indicies)
     dists = distances[~cruise_positions]
     alts = altitudes[~cruise_positions]
 
@@ -532,7 +358,7 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
     # classify the trajectory altitude profile
     altitudes = sorted_df['altitude'].values
     cruise_indicies = find_cruise_sections(altitudes)
-    alt_profile_type = classify_altitude_profile(altitudes, cruise_indicies)
+    alt_profile_type = classify_altitude_profile(altitudes)
 
     # calculate standard deviation and maximum across track error
     xtds = path.calculate_cross_track_distances(sorted_df['points'].values,

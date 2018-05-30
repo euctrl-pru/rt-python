@@ -1,0 +1,33 @@
+logging:
+    version: 1
+    logger-home: &LOGGER_HOME !get_logging_home []
+    formatters:
+        common:
+            format: "%(levelname)s [%(asctime)s] [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
+    handlers:
+        console:
+            class: logging.StreamHandler
+            level: INFO
+            formatter: common
+            stream: ext://sys.stdout
+        ta:
+            class: logging.FileHandler
+            filename: !join [*LOGGER_HOME, /logs/trajectory_analysis.log]
+            level: DEBUG
+            formatter: common
+    loggers:
+        root:
+            level: INFO
+            handlers: [ta, console]
+        apps:
+            level: INFO
+            handlers: [ta, console]
+            propagate: no
+        pru:
+            level: DEBUG
+            handlers: [ta, console]
+            propagate: no
+        scripts:
+            level: DEBUG
+            handlers: [ta, console]
+            propagate: no

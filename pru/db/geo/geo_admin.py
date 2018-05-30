@@ -12,6 +12,7 @@ import socket
 import time
 from pru.db.geo.geo_init import load_airspace, remove_all_sectors, tear_down
 from pru.db.geo.geo_init import load_airports, remove_all_airports
+from pru.db.geo.geo_init import load_user_airspace, remove_all_user_defined_sectors
 from pru.db.common_init import create as create_db, DB_TYPE_GEO
 from pru.db.geo.geo_init import create as create_geo_db
 from pru.logger import logger
@@ -26,6 +27,7 @@ def remove_geo_db():
     """
     remove_all_sectors()
     remove_all_airports()
+    remove_all_user_defined_sectors()
     tear_down()
 
 
@@ -105,3 +107,28 @@ def initialise_airports(airports_file_path, reset=False):
         return True
     else:
         return (False, "Path not found " + airports_file_path)
+
+
+def initialise_user_airspace(user_sector_file_path, reset=False):
+    """
+    Uses the provided file path to load the users sectors file,
+    may be csv or geojson.
+    If no sectors file is found we return false.
+
+    Reset=True  Remove all and replace with this file.
+    Reset=False Add these sectors to the user sectors table.  Note,
+                this is not an update.
+
+    return  True if we succeeded
+            A tuple of (False, message) if we fail
+
+    """
+    connection = ctx.get_connection(ctx.CONTEXT, ctx.DB_USER)
+    context = ctx.CONTEXT
+    if os.path.exists(user_sector_file_path):
+        if reset:
+            remove_all_user_defined_sectors()
+        load_user_airspace(user_sector_file_path, context, connection)
+        return True
+    else:
+        return (False, "Path not found " + user_sector_file_path)

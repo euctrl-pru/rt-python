@@ -91,11 +91,20 @@ def update_flight_data(prev_flights_df, new_items_df):
 
         if flight_id in prev_flights_df.index:
             # append the next days, source flight ids and ssr codes
-            prev_flights_df.at[flight_id, 'SOURCE_IDS'] += flight['SOURCE_IDS']
-            prev_flights_df.at[flight_id, 'SSR_CODES'] += flight['SSR_CODES']
+
+            # Currently on CPR flights are merged and the code below
+            # just complctaes the formatting of the flight_ids and ssr_codes
+            # flight_ids = prev_flights_df.at[flight_id, 'SOURCE_IDS']
+            # flight_ids += flight['SOURCE_IDS']
+            # prev_flights_df.at[flight_id, 'SOURCE_IDS'] = flight_ids.values
+            #
+            # ssr_codes = prev_flights_df.at[flight_id, 'SSR_CODES']
+            # ssr_codes += flight['SSR_CODES']
+            # prev_flights_df.at[flight_id, 'SSR_CODES'] = ssr_codes.values
 
             # finish at the next days finish time
-            prev_flights_df.at[flight_id, 'PERIOD_FINISH'] = flight['PERIOD_FINISH']
+            finish_time = flight['PERIOD_FINISH']
+            prev_flights_df.at[flight_id, 'PERIOD_FINISH'] = finish_time.iloc[0]
 
 
 def merge_flights(prev_flights_filename, next_flights_filename, ids_df, log):

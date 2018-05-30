@@ -11,6 +11,7 @@ import pru.db.context as ctx
 # NM to metres conversion
 NM_CONVERSION_TO_M = 1852
 
+
 def get_geo_db_connection():
     """
     Get the user geo database connection.  Connection for use by

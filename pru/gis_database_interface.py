@@ -10,12 +10,28 @@ from pru.db.geo.geo_operations import make_augmented_trajectory, find_intersecti
 from pru.db.geo.geo_operations import create_intersection_data_structure
 from pru.db.common_operations import get_geo_db_connection, create_buffer, NM_CONVERSION_TO_M
 from pru.db.geo.geo_operations import extract_details_from_intersection, find_line_poly_intersection_with_boundary, merge_l_t
+from pru.db.geo.geo_operations import find_sector, make_sector_description
 from pru.db.geo.ap_geo_operations import extract_intersection_wkts
 from pru.db.geo.ap_geo_operations import finder as airport_finder
 from pru.db.geo.user_geo_operations import finder as user_sector_finder
 
 
 log = logger.logger(__name__)
+
+
+class NotFoundException(Exception):
+    """
+    Not Found exception thrown when we fail to find an item with a database
+    id that should be present.
+
+    Attributes:
+        db_id -- The database identifier we were looking for
+        message -- explanation of the error
+    """
+
+    def __init__(self, db_id, message):
+        self.db_id = db_id
+        self.message = message
 
 
 def find_2D_airspace_intersections(flight_id, latitudes, longitudes,
@@ -51,11 +67,11 @@ def find_2D_airspace_intersections(flight_id, latitudes, longitudes,
         Intersection position longitudes in [degrees].
 
     intersection_sector_ids : a list of strings
-        The ids of the intersected sectors.
+        The database ids of the intersected sectors.
 
     The lists are ordered together, so the same points are at the same index.
     E.g.
-    [latitudes[0], latitudes[-1]], [longitudes[0], longitudes[-1]], ['A', 'A']
+    [latitudes[0], latitudes[-1]], [longitudes[0], longitudes[-1]], ['id1', 'id2']
     """
     log.debug("Finding intersections for flight %s, with min altitude %s and max altitude %s",
               flight_id, min_altitude, max_altitude)
@@ -83,6 +99,38 @@ def find_2D_airspace_intersections(flight_id, latitudes, longitudes,
 
     log.debug("Completed finding intersections for flight id %s", flight_id)
     return intersection_data_structure
+
+
+def get_elementary_airspace_name(db_id):
+    """
+    Get the elementary airspace sector name for the given database id string.
+
+    Raise an exception if not found.
+    """
+
+    connection = get_geo_db_connection()
+
+    sector = find_sector(db_id, connection)
+    if (sector):
+        return make_sector_description(sector, False)
+    else:
+        raise NotFoundException(db_id, "Elementary sector not found.")
+
+
+def get_elementary_airspace_altitude_range(db_id):
+    """
+    Get the altitude range for the given database id string.
+    Raise an exception if not found.
+
+    Returns a tuple of [lower_altitude, upper_altitude]
+    Altitudes in [Feet].
+    """
+    connection = get_geo_db_connection()
+    sector = find_sector(db_id, connection)
+    if (sector):
+        return (sector['min_altitude'], sector['max_altitude'])
+    else:
+        raise NotFoundException(db_id, "Elementary sector not found.")
 
 
 def find_airport_cylinder_intersection(flight_id, latitudes, longitudes,
@@ -115,7 +163,6 @@ def find_airport_cylinder_intersection(flight_id, latitudes, longitudes,
     Returns
     -------
         A tuple of:
-        - found: True if the intersection was found, False otherwise
         - latitude: the intersection position latitude in [degrees]
         - longitude: the intersection position longitude in [degrees]
 
@@ -153,7 +200,11 @@ def find_airport_cylinder_intersection(flight_id, latitudes, longitudes,
 
         # Organise the outputs
         intersection_wkts = extract_intersection_wkts(intersections)
-        intersection_details = extract_details_from_intersection("", intersection_wkts, flight_id)
+
+        # The origin dict included here just tells the eatract routine that
+        # this is not an origin flight.
+        intersection_details = extract_details_from_intersection("", intersection_wkts,
+                                                                 {'is_origin': False}, flight_id)
 
         if len(intersection_details) > 0:
             x_y_sector_ids = reduce(merge_l_t, [intersection_details], [[], [], []])
@@ -198,11 +249,11 @@ def find_2D_user_airspace_intersections(flight_id, latitudes, longitudes,
         Intersection position longitudes in [degrees].
 
     intersection_sector_ids : a list of strings
-        The ids of the intersected sectors.
+        The database ids of the intersected sectors.
 
     The lists are ordered together, so the same points are at the same index.
     E.g.
-    [latitudes[0], latitudes[-1]], [longitudes[0], longitudes[-1]], ['A', 'A']
+    [latitudes[0], latitudes[-1]], [longitudes[0], longitudes[-1]], ['id1', 'id2']
     """
     log.debug("Finding intersections for flight %s, with min altitude %s and max altitude %s",
               flight_id, min_altitude, max_altitude)
@@ -231,23 +282,30 @@ def find_2D_user_airspace_intersections(flight_id, latitudes, longitudes,
     return intersection_data_structure
 
 
-def find_user_sector_altitude_range(db_id):
+def get_user_sector_name(db_id):
     """
-    Find the user defined sector for the given database id.
-    The db id will be unique for each entry, there is only one
-    possible row that can be found.
+    Get the user defined sector for the given database id string.
 
-    Requires a database identifier integre as a string.
-
-    Returns a tuple of (True, res_dict) or
-    (False, {})
+    Raise an exception if not found.
     """
-    found = user_sector_finder("id", db_id)
-    if found[0]:
-        res = found[1][0]
-        return True, {'id': res['id'],
-                      'min_altitude': res['min_altitude'],
-                      'max_altitude': res['max_altitude'],
-                      'is_cylinder': res['is_cylinder']}
+
+    found, sector = user_sector_finder("id", int(db_id))
+    if found:
+        return make_sector_description(sector[0], True)
     else:
-        return False, {}
+        raise NotFoundException(db_id, "User sector not found.")
+
+
+def get_user_sector_altitude_range(db_id):
+    """
+    Get the altitude range for the given database user sector id string
+    Raise an exception if not found.
+
+    Returns a tuple of [lower_altitude, upper_altitude]
+    Alitudes in [Feet].
+    """
+    found, sector = user_sector_finder("id", int(db_id))
+    if found:
+        return (sector[0]['min_altitude'], sector[0]['max_altitude'])
+    else:
+        raise NotFoundException(db_id, "User sector not found.")

@@ -26,7 +26,8 @@ def finder(key_name, id_value):
     """
     Find the airport with the given id value using the provided key name.
     Returns a tuple of (True, [(db_id, iata, icao, is_ct_code, lat, lon), ...])
-    or (False, [])
+    or (False, []).  If a record is found but the field is missing it will be
+    None in the result.
     """
     connection = get_geo_db_connection()
     context = ctx.CONTEXT

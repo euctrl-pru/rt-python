@@ -15,10 +15,10 @@ from psycopg2.extensions import AsIs
 from psycopg2.extras import DictCursor
 
 REG_KEY = 'AIRCRAFT_REG'
-REG_KEY = 'AIRCRAFT_TYPE'
+TYPE_KEY = 'AIRCRAFT_TYPE'
 ADDRESS_KEY = 'AIRCRAFT_ADDRESS'
 
-KEYS = {REG_KEY, REG_KEY, ADDRESS_KEY}
+KEYS = {REG_KEY, TYPE_KEY, ADDRESS_KEY}
 
 log = logger(__name__)
 
@@ -64,13 +64,18 @@ def find_aircraft(db_id, context, connection):
 
 def find_by_keys(name_values, context, connection):
     """
-    Find by combination of keys:
+    Find by combination of keys in a dict like {'AIRCRAFT_REG': "abc",
+                                                'AIRCRAFT_TYPE':"ZZ",
+                                                'AIRCRAFT_ADDRESS': 'address'}
     If a key is unknown we return a tuple of False, Error Message
     """
     schema_name = context[ctx.SCHEMA_NAME]
-    if name_values:
+    if all([KEYS.__contains__(key) for key in name_values.keys()]):
         select = "select * from %s.fleet where AIRCRAFT_REG=%s and AIRCRAFT_TYPE=%s and AIRCRAFT_ADDRESS=%s;"
-        params = [AsIs(schema_name), name_values['AIRCRAFT_REG'], name_values['AIRCRAFT_TYPE'], name_values['AIRCRAFT_ADDRESS']]
+        params = [AsIs(schema_name),
+                  name_values['AIRCRAFT_REG'],
+                  name_values['AIRCRAFT_TYPE'],
+                  name_values['AIRCRAFT_ADDRESS']]
         try:
             with connection.cursor(cursor_factory=DictCursor) as cursor:
                 cursor.execute(select, params)
@@ -83,13 +88,12 @@ def find_by_keys(name_values, context, connection):
             log.exception("Failed to find  : Exception")
             return False, "Failed to find  : Exception"
     else:
-        return False, "No key_value_map provided"
+        return False, f"Uknown key in dict {name_values.keys()}"
 
 
 def find_by_reg_type(reg, type, context, connection):
     """
-    Find by combination of keys:
-    If a key is unknown we return a tuple of False, Error Message
+    Find by cregistration and type
     """
     schema_name = context[ctx.SCHEMA_NAME]
     select = "select * from %s.fleet where AIRCRAFT_REG=%s and AIRCRAFT_TYPE=%s;"

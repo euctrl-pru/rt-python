@@ -9,9 +9,8 @@ import pandas as pd
 from .EcefPoint import rad2nm
 from .ecef_functions import calculate_EcefPoints
 from .SmoothedTrajectory import SmoothedTrajectory
-from .trajectory_functions import calculate_date_times, set_exit_flags
-from .trajectory_interpolation import interpolate_altitude_profile, \
-    interpolate_time_profile_by_distance
+from .trajectory_functions import calculate_date_times
+from .trajectory_interpolation import interpolate_time_profile_by_distance
 from .gis_database_interface import find_airport_cylinder_intersection
 
 AIRPORT_INTERSECTION_FIELD_LIST = ['FLIGHT_ID', 'AIRPORT_ID', 'RADIUS', 'IS_DESTINATION',
@@ -96,7 +95,7 @@ def find_airport_intersection(smooth_traj, airport, radius, is_destination):
         intersect_df.sort_values(by=['DISTANCE'], inplace=True)
 
         sorted_distances = intersect_df['DISTANCE'].values
-        intersect_df['ALT'] = interpolate_altitude_profile(smooth_traj.altp, sorted_distances)
+        intersect_df['ALT'] = smooth_traj.altp.interpolate(sorted_distances)
         times = interpolate_time_profile_by_distance(smooth_traj.timep, sorted_distances)
         intersect_df['TIME'] = calculate_date_times(times, smooth_traj.timep.start_time)
 

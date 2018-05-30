@@ -210,8 +210,8 @@ def find_sector_identifiers(db_ID, context, connection):
 
 def find_airspace_by_database_ID(db_ID, context, connection, is_user_defined=False):
     """
-    Finds an aairspace with the given id, for example
-    LFBBT2. Returns a list, list may be empty.
+    Finds an aairspace with the given database id
+    Returns a list, list may be empty.
     """
     schemaName = context[ctx.SCHEMA_NAME]
     with connection.cursor(cursor_factory=DictCursor) as cursor:
@@ -223,6 +223,23 @@ def find_airspace_by_database_ID(db_ID, context, connection, is_user_defined=Fal
             cursor.execute("SELECT * FROM %s.sectors WHERE "
                            "id = %s", [AsIs(schemaName), db_ID])
             return cursor.fetchmany()
+
+
+def originates(first_point, polygon_string, flight_id, sector_id, connection):
+    """
+    If the first point is inside the given sector we determine that the
+    trajectory originates in the sector.
+    first_point wkb for the first point of the trajectory
+    returns True => originates in sectors
+    """
+    cursor = connection.cursor()
+    query = "SELECT ST_Intersects(%s::geography, %s::geography);"
+    params = [first_point, polygon_string]
+    cursor.execute(query, params)
+    originates = cursor.fetchone()[0]
+    if originates:
+        log.debug(f"Flight with  id {flight_id} originates in sector {sector_id}")
+    return originates
 
 
 def find_line_poly_intersection_with_boundary(lineString, polygonString, connection):
@@ -245,9 +262,14 @@ def find_intersections(augmented_trajectory, min_altitude, max_altitude, flight_
     the augmented trajectory.
     """
     log.debug(f"Finding intersection for flight id {flight_id}")
+
+    first_point = augmented_trajectory['extendedPoints'][0]['geoPoint']
+    first_point_lon = augmented_trajectory['extendedPoints'][0]['lon']
+    first_point_lat = augmented_trajectory['extendedPoints'][0]['lat']
+    is_user_defined = augmented_trajectory['is_user_defined']
+
     # Eliminate sectors that are below and above the min and max altitude of
     # the trajectory.
-    is_user_defined = augmented_trajectory['is_user_defined']
     reduced_trajectory = eliminate_sectors(augmented_trajectory, min_altitude, max_altitude, flight_id)
 
     # Find each sector
@@ -258,12 +280,16 @@ def find_intersections(augmented_trajectory, min_altitude, max_altitude, flight_
                                             connection, is_user_defined)[0] for sector_id in sector_IDs]
     # Find the points of the trajectory where the trajectory intersects
     # with each sector
+
     if is_user_defined:
-        segments = [{'flight_id': reduced_trajectory['extendedPoints'][0]['flight_id'],
+        segments = [{'flight_id': flight_id,
                      'intersections': find_line_poly_intersection_with_boundary(reduced_trajectory['line'],
                                                                                 sector['wkt'],
                                                                                 connection),
-                     'sector_id': sector['id'],
+                     'origin': {'is_origin': originates(first_point, sector['wkt'], flight_id, sector['id'], connection),
+                                'origin_lat': first_point_lat,
+                                'origin_lon': first_point_lon},
+                     'id': sector['id'],
                      'org_id': sector['org_id'],
                      'user_id': sector['user_id'],
                      'sector_name': sector['sector_name'],
@@ -272,11 +298,14 @@ def find_intersections(augmented_trajectory, min_altitude, max_altitude, flight_
                      'is_cylinder': sector['is_cylinder'],
                      'is_user_defined': is_user_defined} for sector in sectors]
     else:
-        segments = [{'flight_id': reduced_trajectory['extendedPoints'][0]['flight_id'],
+        segments = [{'flight_id': flight_id,
                      'intersections': find_line_poly_intersection_with_boundary(reduced_trajectory['line'],
                                                                                 sector['wkt'],
                                                                                 connection),
-                     'sector_id': sector['id'],
+                     'origin': {'is_origin': originates(first_point, sector['wkt'], flight_id, sector['id'], connection),
+                                'origin_lat': first_point_lat,
+                                'origin_lon': first_point_lon},
+                     'id': sector['id'],
                      'av_icao_state_id': sector['av_icao_state_id'],
                      'av_name': sector['av_name'],
                      'av_airspace_id': sector['av_airspace_id'],
@@ -302,34 +331,46 @@ def extract(sector_id, shape, flight_id):
         return []
 
 
-def extract_details_from_intersection(sector_id, wkt, flight_id):
+def extract_details_from_intersection(sector_id, wkt, origin, flight_id):
     """
     Given an intersection wkt use shapley to create the point or multipoint
     object.  Then extract the latitude and longitudes from the (multi)point.
 
     Returns a list of tuples of sector_id, latiitude and longitude
     """
-    return extract(sector_id, loads(wkt), flight_id)
+    intersection_tuples = extract(sector_id, loads(wkt), flight_id)
+    if origin['is_origin']:
+        # If this sector is an origin sector, add in the lat lons at the start.
+        intersection_tuples = [(sector_id, origin['origin_lat'], origin['origin_lon'])] + intersection_tuples
+    return intersection_tuples
 
 
-def make_sector_description(intersection):
+def make_sector_description(intersection, is_user_defined=False):
     """
-    Makes a text descritption of the sector from the database row for the
-    sector.
-    Returns a string created like dbid-av_airspace_id-av_icao_state_id-av_name
+    Makes a text description of the sector from the intersection description
     """
-    if intersection['is_user_defined']:
-        return f'{intersection["sector_id"]}'
+    if is_user_defined:
+        return f'{intersection["org_id"]}/{intersection["user_id"]}/{intersection["sector_name"]}'
     else:
-        return f'{intersection["av_icao_state_id"]}/{intersection["av_name"]}/{intersection["sector_id"]}/{intersection["av_airspace_id"]}'
+        return f'{intersection["av_icao_state_id"]}/{intersection["av_name"]}/{intersection["id"]}/{intersection["av_airspace_id"]}'
+
+
+def make_sector_identifier(intersection):
+    """
+    Makes a text version of the database id in the given intersection
+    """
+    return f'{intersection["id"]}'
 
 
 def extract_intersection_wkts(intersections):
     """
     Given a list of intersection dicts return a list of wkts with sector
-    descriptive text as a tuple.  ie ("some-text-made-from-sector-ids", wkt)
+    descriptive text and the origin details as a tuple.
+    ie ("some-text-made-from-sector-ids", wkt, {is_origin:False, origin_lat:lat, origin_lon: lon})
     """
-    return [(make_sector_description(intersection), intersection['intersections']['segmentStrings'][0][0]) for intersection in intersections]
+    return [(make_sector_identifier(intersection),
+             intersection['intersections']['segmentStrings'][0][0], intersection['origin'])
+            for intersection in intersections]
 
 
 def merge_l_t(l, lt):
@@ -349,8 +390,8 @@ def create_intersection_data_structure(intersections, flight_id):
     """
     Given the intersection data structures create a response tuple.
     """
-    # The intersection wkts are tuples of the sector_id and the wkt for the
-    # intersection.
+    # The intersection wkts are tuples of the sector_id, the wkt and the origin
+    # status for the intersection.
     intersection_wkts = extract_intersection_wkts(intersections)
     intersection_details = [extract_details_from_intersection(*intersection_wkt, flight_id) for intersection_wkt in intersection_wkts]
     x_y_sector_ids = reduce(merge_l_t, intersection_details, [[], [], []])

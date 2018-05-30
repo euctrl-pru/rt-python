@@ -12,6 +12,9 @@ from pru.trajectory_fields import CSV_FILE_EXTENSION, JSON_FILE_EXTENSION, \
 DEFAULT_AIRPORTS_FILENAME = 'airports.csv'
 """ A file containing IATA and ICAO airport codes for convert_airport_ids.py. """
 
+DEFAULT_AIRPORT_MOVEMENTS_FILENAME = 'movements_reporting_airports.csv'
+""" A file ICAO airport codes and positions for finding airport intersections. """
+
 DEFAULT_STANDS_FILENAME = 'stands_EGLL.csv'
 """ A file airport stand positions for convert_apt_data.py. """
 

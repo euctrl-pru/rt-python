@@ -47,81 +47,13 @@ TEST_ALTITUDES = np.array([35200, 35200,  35200,
 
 class TestTrajectorySmoothing(unittest.TestCase):
 
-    def test_closest_cruising_altitude(self):
-        self.assertEqual(closest_cruising_altitude(35000), 35000)
-        self.assertEqual(closest_cruising_altitude(34500), 35000)
-        self.assertEqual(closest_cruising_altitude(35400), 35000)
-
-    def test_is_cruising(self):
-        self.assertTrue(is_cruising(35000, 35000))
-        self.assertTrue(is_cruising(35000))
-        self.assertTrue(is_cruising(34800))
-        self.assertTrue(is_cruising(35200))
-
-        self.assertFalse(is_cruising(34799))
-        self.assertFalse(is_cruising(35201))
-
-        self.assertFalse(is_cruising(35000, 36000))
-
-    def test_in_cruise_level_range(self):
-        CRUISE_ALTITUDES = np.array([35200, 35100,  35000,
-                                     34900, 34800,  34800])
-        self.assertTrue(in_cruise_level_range(CRUISE_ALTITUDES, 35000))
-
-        NON_CRUISE_ALTITUDES = np.array([35200, 35100,  35000,
-                                         34900, 34700,  34800])
-        self.assertFalse(in_cruise_level_range(NON_CRUISE_ALTITUDES, 35000))
-
-    def test_find_cruise_sections(self):
-
-        indicies = find_cruise_sections(TEST_ALTITUDES)
-        self.assertEqual(len(indicies), 4)
-        self.assertEqual(indicies[0], 0)
-        self.assertEqual(indicies[1], 5)
-        self.assertEqual(indicies[2], 9)
-        self.assertEqual(indicies[3], 11)
-
-    def test_find_cruise_positions(self):
-
-        cruise_positions = [False, True, True,
-                            True, False, False,
-                            False, False, False,
-                            False, True, False]
-
-        cruise_indicies = find_cruise_sections(TEST_ALTITUDES)
-        results = find_cruise_positions(len(TEST_ALTITUDES), cruise_indicies)
-        assert_array_almost_equal(results, cruise_positions)
-
     def test_calculate_cruise_delta_alts(self):
 
-        cruise_delta_alts = [200.0, 200.0, -200.0]
+        cruise_delta_alts = [200.0, 200.0, -200.0, -200.0, 0.0]
 
         cruise_indicies = find_cruise_sections(TEST_ALTITUDES)
         results = calculate_cruise_delta_alts(TEST_ALTITUDES, cruise_indicies)
         assert_array_almost_equal(results, cruise_delta_alts)
-
-    def test_classify_altitude_profile(self):
-        CRUISE_ALTITUDES = np.array([35000, 35000,  35000,
-                                     35000, 35000,  35000])
-        cruise_indicies = find_cruise_sections(CRUISE_ALTITUDES)
-        self.assertEqual(classify_altitude_profile(CRUISE_ALTITUDES, cruise_indicies),
-                         AltitudeProfileType.CRUISING)
-
-        CLIMB_ALTITUDES = np.array([34000, 34500,  35000,
-                                    35000, 35500,  36000])
-        climb_indicies = find_cruise_sections(CLIMB_ALTITUDES)
-        self.assertEqual(classify_altitude_profile(CLIMB_ALTITUDES, climb_indicies),
-                         AltitudeProfileType.CLIMBING)
-
-        DESCENT_ALTITUDES = np.array([36000, 35500,  35000,
-                                      35000, 34500,  34000])
-        descent_indicies = find_cruise_sections(DESCENT_ALTITUDES)
-        self.assertEqual(classify_altitude_profile(DESCENT_ALTITUDES, descent_indicies),
-                         AltitudeProfileType.DESCENDING)
-
-        indicies = find_cruise_sections(ALTITUDES)
-        self.assertEqual(classify_altitude_profile(ALTITUDES, indicies),
-                         AltitudeProfileType.CLIMBING_AND_DESCENDING)
 
     def test_analyse_altitudes(self):
 
@@ -129,7 +61,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
 
         altp, alt_sd, max_alt = analyse_altitudes(DISTANCES, ALTITUDES, cruise_indicies)
 
-        self.assertEqual(len(altp.altitudes), len(ALTITUDES) - 1)
+        self.assertEqual(len(altp.altitudes), len(ALTITUDES) - 2)
 
     def test_analyse_trajectory_1(self):
         test_data_home = env.get('TEST_DATA_HOME')

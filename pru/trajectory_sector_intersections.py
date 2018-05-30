@@ -4,24 +4,20 @@
 Functions to find trajectory sector intersection data.
 """
 
-import numpy as np
 import pandas as pd
-from .EcefPoint import rad2nm
-from .ecef_functions import calculate_EcefPoints
-from .SmoothedTrajectory import SmoothedTrajectory
-from .trajectory_functions import calculate_date_times, set_exit_flags
-from .trajectory_interpolation import interpolate_altitude_profile, \
-    interpolate_time_profile_by_distance
-from .gis_database_interface import find_2D_airspace_intersections
+from .AirspaceVolume import AirspaceVolume
+from .gis_database_interface import find_2D_airspace_intersections, \
+    get_elementary_airspace_name, get_elementary_airspace_altitude_range, \
+    NotFoundException
+from .airspace_intersections import find_3D_airspace_intersections
+from pru.logger import logger
 
-AIRSPACE_INTERSECTION_FIELD_LIST = ['FLIGHT_ID', 'SECTOR_ID', 'IS_EXIT',
-                                    'LAT', 'LON', 'ALT', 'TIME', 'DISTANCE']
-""" The output intersection fields. """
+log = logger(__name__)
 
 
 def find_trajectory_sector_intersections(smooth_traj):
     """
-    Find airspace sector intersection positions from a smoothed trajectory
+    Find airspace sector intersection positions from a smoothed trajectory.
 
     Parameters
     ----------
@@ -32,58 +28,34 @@ def find_trajectory_sector_intersections(smooth_traj):
     Returns
     -------
     intersection_positions: a pandas DataFrame
-        The trajectory sector intersection positions.
+        The trajectory user airspace intersection positions.
+        Empty if no intersections found.
     """
     lats = []
     lons = []
-    sector_ids = []
+    volume_ids = []
 
     min_altitude = smooth_traj.altp.altitudes.min()
     max_altitude = smooth_traj.altp.altitudes.max()
-    lats, lons, sector_ids = find_2D_airspace_intersections(smooth_traj.flight_id,
+    lats, lons, volume_ids = find_2D_airspace_intersections(smooth_traj.flight_id,
                                                             smooth_traj.path.lats,
                                                             smooth_traj.path.lons,
                                                             min_altitude, max_altitude)
-    # Create an array of flight_ids
-    flight_id = np.array(len(lats), dtype='object')
-    flight_id.fill(str(smooth_traj.flight_id))
+    if len(lats):
+        # A dict to hold the intersected volumes
+        volumes = {}
+        try:
+            for volume_id in set(volume_ids):
+                volume_name = get_elementary_airspace_name(volume_id)
+                bottom_alt, top_alt = get_elementary_airspace_altitude_range(volume_id)
+                volumes.setdefault(volume_id, AirspaceVolume(volume_name,
+                                                             bottom_alt, top_alt))
+        except NotFoundException:
+            log.exception('sector id: %s not found for flight id: %s',
+                          volume_id, smooth_traj.flight_id)
+            return pd.DataFrame()
 
-    alts = np.zeros(len(lats), dtype=np.float)
-    date_times = np.empty(len(lats), dtype='datetime64[us]')
-    date_times.fill(smooth_traj.timep.start_time)
-
-    is_exits = set_exit_flags(sector_ids)
-
-    distances = np.zeros(len(lats), dtype=np.float)
-
-    # create a pandas DataFrame with trajectory_fields.AIRSPACE_INTERSECTION_FIELD_LIST
-    intersect_df = pd.DataFrame({'FLIGHT_ID': flight_id,
-                                 'SECTOR_ID': np.array(sector_ids),
-                                 'IS_EXIT': is_exits,
-                                 'LAT': np.array(lats),
-                                 'LON': np.array(lons),
-                                 'ALT': alts,
-                                 'TIME': date_times,
-                                 'DISTANCE': distances},
-                                columns=AIRSPACE_INTERSECTION_FIELD_LIST)
-
-    if (len(lats)):
-
-        # Construct the EcefPath corresponding to the HorizontalPath
-        ecef_path = smooth_traj.path.ecef_path()
-        tolerance_radians = np.deg2rad(0.25 / 60.0)
-        ecef_points = calculate_EcefPoints(intersect_df['LAT'].values,
-                                           intersect_df['LON'].values)
-        path_distances = rad2nm(ecef_path.calculate_path_distances(ecef_points,
-                                                                   tolerance_radians))
-        # Sort dataframe by path_distances
-        intersect_df['DISTANCE'] = path_distances
-        intersect_df.sort_values(by=['DISTANCE'], inplace=True)
-
-        sorted_distances = intersect_df['DISTANCE'].values
-        intersect_df['ALT'] = interpolate_altitude_profile(smooth_traj.altp, sorted_distances)
-        times = interpolate_time_profile_by_distance(smooth_traj.timep, sorted_distances)
-        intersect_df['TIME'] = calculate_date_times(times, smooth_traj.timep.start_time)
-
-    # return the data in a pandas DataFrame with trajectory_fields.AIRSPACE_INTERSECTION_FIELD_LIST
-    return intersect_df
+        return find_3D_airspace_intersections(smooth_traj, lats, lons,
+                                              volume_ids, volumes)
+    else:
+        return pd.DataFrame()

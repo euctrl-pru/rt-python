@@ -175,6 +175,13 @@ class TestTrajectoryFunctions(unittest.TestCase):
         start_time = datetimes[0]
         finish_time = datetimes[-1]
 
+        # Test before start of range
+        index_0, ratio_0 = calculate_value_reference(datetimes,
+                                                     np.datetime64('2017-08-01 11:14'),
+                                                     is_time=True)
+        self.assertEqual(index_0, 0)
+        self.assertEqual(ratio_0, 0.0)
+
         # use the first value
         index_1, ratio_1 = calculate_value_reference(datetimes, start_time,
                                                      is_time=True)
@@ -206,6 +213,12 @@ class TestTrajectoryFunctions(unittest.TestCase):
         index_6, ratio_6 = calculate_value_reference(datetimes, time_6, is_time=True)
         self.assertEqual(index_6, 29)
         self.assertEqual(ratio_6, 0.8)
+
+        # Test past end of range
+        time_7 = np.datetime64('2017-08-01 11:26')
+        index_7, ratio_7 = calculate_value_reference(datetimes, time_7, is_time=True)
+        self.assertEqual(index_7, 119)
+        self.assertEqual(ratio_7, 0.0)
 
     def test_calculate_value(self):
         """Test the calculate_value function with an altitude series."""
@@ -303,16 +316,6 @@ class TestTrajectoryFunctions(unittest.TestCase):
                                                       ecef_points_1, ecef_points_3,
                                                       alts1, alts1, time_threshold=60.0,
                                                       speed_threshold=750.0))
-
-    def test_set_exit_flags(self):
-        """Test the set_exit_flags function."""
-        ids_1 = ['A', 'A', 'B', 'C', 'C', 'C', 'A', 'A', 'A', 'A']
-        exits = np.array([False, True, False, False, True, False, False, True, False, True])
-
-        result = set_exit_flags(ids_1)
-        assert_array_almost_equal(result, exits)
-        # print(exits.tolist())
-        # self.assertFalse(exits[0])
 
 
 if __name__ == '__main__':

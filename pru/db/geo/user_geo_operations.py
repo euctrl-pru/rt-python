@@ -68,8 +68,8 @@ def find_by_org_user_name(org, user, name):
     connection = get_geo_db_connection()
     context = ctx.CONTEXT
     schema = context[ctx.SCHEMA_NAME]
-    query = "SELECT * from %s.user_defined_sectors where org_id = %s and user_id %s and sector_name = %s;"
-    params = (AsIs(schema), AsIs(org), AsIs(user), AsIs(name))
+    query = "SELECT * from %s.user_defined_sectors where org_id = %s and user_id = %s and sector_name = %s;"
+    params = (AsIs(schema), org, user, name)
     try:
         with connection.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute(query, params)

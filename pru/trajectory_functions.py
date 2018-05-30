@@ -256,16 +256,19 @@ def calculate_value_reference(values, value, *, is_time=False):
     """
     index = bisect.bisect_left(values, value)
     ratio = 0.0
-    index_value = values[index]
-    if (index > 0) and (value < index_value):
-        index -= 1
-        denom = calculate_delta_time(values[index], index_value) if is_time else \
-            index_value - values[index]
+    if index < len(values):
+        index_value = values[index]
+        if (index > 0) and (value < index_value):
+            index -= 1
+            denom = calculate_delta_time(values[index], index_value) if is_time else \
+                index_value - values[index]
 
-        if (denom > 0.0):
-            delta = calculate_delta_time(values[index], value) if is_time else \
-                value - values[index]
-            ratio = delta / denom
+            if (denom > 0.0):
+                delta = calculate_delta_time(values[index], value) if is_time else \
+                    value - values[index]
+                ratio = delta / denom
+    else:
+        index = len(values) - 1
 
     return index, ratio
 
@@ -393,32 +396,3 @@ def compare_trajectory_positions(a_times, b_times, a_points, b_points,
             return False
 
     return (distance <= distance_threshold) and (delta_alt <= alt_threshold)
-
-
-def set_exit_flags(ids):
-    """
-    Set flags corresponding to the input list.
-
-    Parameters
-    ----------
-    ids: ids array
-        An array of ids.
-
-    Returns
-    -------
-    A numpy boolean array with each value set for the second consecutive
-    occurance of an id.
-    """
-    is_exits = np.zeros(len(ids), dtype=np.bool)
-    if len(ids):
-        last_id = ''
-        count = 0
-        for i, id in enumerate(ids):
-            if last_id == id:
-                count += 1
-                is_exits[i] = count % 2
-            else:
-                last_id = id
-                count = 0
-
-    return is_exits

@@ -11,7 +11,6 @@ from .EcefPath import PointType, EcefPath
 from .ecef_functions import calculate_EcefPoints, calculate_LatLongs
 from .trajectory_functions import calculate_date_times, calculate_speed, \
     calculate_vertical_speed, convert_angle_to_track_angle
-from .trajectory_analysis import find_level_sections
 from .trajectory_fields import POSITION_FIELDS
 
 DEFAULT_STRAIGHT_INTERVAL = 5.0
@@ -22,32 +21,6 @@ DEFAULT_TURN_INTERVAL = 5.0
 
 POSITION_FIELD_LIST = POSITION_FIELDS.split(',')[:-4]
 """ The output position fields. """
-
-
-def interpolate_altitude_profile(altp, distances):
-    """
-    Interpolate altitudes at distance values.
-
-    Uses the scipy.interpolate.CubicSpline function to interpolate
-    altitudes at the required distances.
-
-    Parameters
-    ----------
-    altp: an AltitudeProfile
-        An AltitudeProfile object.
-
-    distances: float array
-        An ordered array of distances in [Nautical Miles].
-
-    Returns
-    -------
-    alts : float array
-        The interpolated altitudes at the given distances.
-    """
-    cruise_indicies = find_level_sections(altp.altitudes)
-
-    cs = CubicSpline(altp.distances, altp.altitudes)
-    return cs(distances)
 
 
 def interpolate_time_profile_by_distance(timep, distances):
@@ -201,7 +174,7 @@ def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interv
         - get the turn point distances and point types from ecef_path
         - calls calculate_interpolation_times to get the output times
         - calls interpolate_time_profile_by_elapsed_time to get the distances
-        - calls interpolate_altitude_profile, ecef_path.calculate_positions, etc
+        - calls AltitudeProfile.interpolate, ecef_path.calculate_positions, etc
         to calculate interpolated altitudes, positions, speeds, etc. at the distances.
 
     Parameters
@@ -232,7 +205,7 @@ def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interv
     times = calculate_interpolation_times(point_times, point_types,
                                           straight_interval, turn_interval)
     distances = interpolate_time_profile_by_elapsed_time(smooth_traj.timep, times)
-    altitudes = interpolate_altitude_profile(smooth_traj.altp, distances)
+    altitudes = smooth_traj.altp.interpolate(distances)
 
     # calculate points at path disatnces
     points = ecef_path.calculate_positions(distances)
@@ -247,13 +220,13 @@ def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interv
     date_times = calculate_date_times(times, smooth_traj.timep.start_time)
 
     # Create an array of flight_ids
-    flight_id = np.array(len(date_times), dtype=np.string_)
+    flight_id = np.array(len(date_times), dtype='object')
     flight_id.fill(str(smooth_traj.flight_id))
 
     # return the data in a pandas DataFrame with trajectory_fields.POSITION_FIELDS
     return pd.DataFrame({'FLIGHT_ID': flight_id,
                          'DISTANCE': distances,
-                         'TIME_CALCULATED': date_times,
+                         'TIME': date_times,
                          'LAT': lats,
                          'LON': lons,
                          'ALT': altitudes,
