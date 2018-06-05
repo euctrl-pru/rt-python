@@ -30,23 +30,24 @@ def create_users_roles(context, connection):
     user_name = context[ctx.USER_NAME]
     query_admin = "CREATE ROLE %s with CREATEDB CREATEROLE LOGIN PASSWORD '%s';"
     params_admin = [AsIs(admin_name), AsIs(admin_name)]
+    return_state = True
     try:
         with connection.cursor() as cursor:
             cursor.execute(query_admin, params_admin)
     except ProgrammingError:
-        log.exception(f"Failed to add role {admin_name} going to "
-                      "re-use this role.")
-        return False
+        log.warning(f"Failed to add role {admin_name} going to "
+                    "re-use this role.")
+        return_state = False
     query_user = "CREATE ROLE %s with LOGIN;"
     params_user = [AsIs(user_name)]
     try:
         with connection.cursor() as cursor:
             cursor.execute(query_user, params_user)
     except ProgrammingError:
-        log.exception(f"Failed to add role {user_name} Going to reuse "
-                      "this role.")
-        return False
-    return True
+        log.warning(f"Failed to add role {user_name} Going to reuse "
+                    "this role.")
+        return_state = False
+    return return_state
 
 
 def create_db(context, connection):

@@ -189,6 +189,26 @@ class TestAltitudeProfile(unittest.TestCase):
         assert_almost_equal(min_alt_2, 4200.0)
         assert_almost_equal(max_alt_2, 4800.0)
 
+    def test_AltitudeProfile_top_of_climb_index(self):
+        profile = AltitudeProfile(DISTANCES, ALTITUDES)
+
+        self.assertEqual(profile.top_of_climb_index(), 6)
+
+    def test_AltitudeProfile_top_of_descent_index(self):
+        profile = AltitudeProfile(DISTANCES, ALTITUDES)
+
+        self.assertEqual(profile.top_of_descent_index(), 7)
+
+    def test_AltitudeProfile_top_of_climb_distance(self):
+        profile = AltitudeProfile(DISTANCES, ALTITUDES)
+
+        self.assertEqual(profile.top_of_climb_distance(), DISTANCES[6])
+
+    def test_AltitudeProfile_top_of_descent_distancex(self):
+        profile = AltitudeProfile(DISTANCES, ALTITUDES)
+
+        self.assertEqual(profile.top_of_descent_distance(), DISTANCES[7])
+
     def test_AltitudeProfile_intersection_distances(self):
         profile = AltitudeProfile(DISTANCES, ALTITUDES)
 

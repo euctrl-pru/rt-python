@@ -4,7 +4,7 @@
 # Describes a pru jupyter docker image
 # Based on the base notebook image.
 
-FROM nb-base:0.3.0
+FROM nb-base:0.4.0
 
 LABEL maintainer="pete.marshall@via-technology.aero"
 
@@ -24,9 +24,6 @@ ARG PEM_FILE=pem-file.json
 # End of common args
 #
 
-# The default kind of deployment is int
-ENV DEPLOYMENT_TYPE ${DEPLOYMENT_TYPE}
-
 # The source code
 ENV PROJECT_HOME ${PROJECT_HOME:-/pru-python}
 
@@ -34,11 +31,14 @@ ENV PYTHONPATH $PROJECT_HOME
 
 ENV PRU_HOME ${PRU_HOME:-/pru}
 
-ENV DATA_HOME /$DEPLOYMENT_TYPE/data
+# The default kind of deployment is int
+ENV DEPLOYMENT_TYPE ${DEPLOYMENT_TYPE}
+
+ENV DATA_HOME $HOME/data
 
 ENV NOTEBOOK_HOME $HOME/notebooks
 
-ENV LOGGER_HOME $PRU_HOME/logging
+ENV LOGGER_HOME $HOME/logging
 
 ENV UPLOAD_DIR $DATA_HOME/upload
 
@@ -56,50 +56,27 @@ ENV PEM_FILE $PRU_HOME/certs/${PEM_FILE:-pem-file.json}
 USER root
 
 RUN mkdir $PRU_HOME \
- && mkdir /$DEPLOYMENT_TYPE \
- && mkdir $DATA_HOME \
- && mkdir $DATA_HOME/airports \
- && mkdir $DATA_HOME/airports/stands \
- && mkdir $DATA_HOME/airspaces \
- && mkdir $DATA_HOME/upload \
- && mkdir $DATA_HOME/upload/cpr \
- && mkdir $DATA_HOME/upload/fr24 \
- && mkdir $DATA_HOME/upload/apds \
- && mkdir $DATA_HOME/products \
- && mkdir $DATA_HOME/refined \
- && mkdir $DATA_HOME/merged \
- && mkdir $DATA_HOME/analysis \
- && mkdir $DATA_HOME/fleet_data \
- && mkdir $LOGGER_HOME \
- && mkdir $LOGGER_HOME/logs \
  && mkdir $PROJECT_HOME \
  && mkdir $PROJECT_HOME/pru \
  && mkdir $PROJECT_HOME/apps \
  && mkdir $PROJECT_HOME/scripts \
  && mkdir $PROJECT_HOME/tools \
- && mkdir $NOTEBOOK_HOME
+ && mkdir $PROJECT_HOME/notebooks \
+ && mkdir $PROJECT_HOME/config
 
-RUN chown -R 1000:100 $PRU_HOME /$DEPLOYMENT_TYPE 
- 
-VOLUME ["/int/data", "/pru/logging/logs"]
+RUN chown -R 1000:100 $PRU_HOME
 
-# NOTE COPY --chown=1000:100 fails unknown flag even though it documented!!
-COPY --chown=1000:100 config/logging.yaml $LOGGER_HOME
+# Copy directories from the python repo
 COPY --chown=1000:100 pru $PROJECT_HOME/pru
 COPY --chown=1000:100 apps $PROJECT_HOME/apps
 COPY --chown=1000:100 scripts $PROJECT_HOME/scripts
 COPY --chown=1000:100 tools $PROJECT_HOME/tools
-COPY --chown=1000:100 notebooks $PRU_HOME/notebooks
+COPY --chown=1000:100 notebooks $PROJECT_HOME/notebooks
+COPY --chown=1000:100 config $PROJECT_HOME/config
 
-RUN chown -R 1000:100 $LOGGER_HOME \
- && chown -R 1000:100 $DATA_HOME \
- && chown -R 1000:100 $PROJECT_HOME \
- && chown -R 1000:100 $PRU_HOME \
- && chmod -R ugo+x $PROJECT_HOME/apps \
+RUN chmod -R ugo+x $PROJECT_HOME/apps \
  && chmod -R ugo+x $PROJECT_HOME/tools \
- && chown -R 1000:100 $PRU_HOME/notebooks\ 
- && chmod ug+r-w $PRU_HOME/notebooks/*.ipynb \
- && chown -R 1000:100 $NOTEBOOK_HOME
+ && chmod 777 $PROJECT_HOME/config/notebook-config.sh
 
 # Revert to USER jovyan, see: https://github.com/jupyter/docker-stacks/issues/188
 USER $NB_UID

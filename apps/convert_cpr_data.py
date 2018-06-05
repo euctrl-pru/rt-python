@@ -214,7 +214,7 @@ class CprFlight:
         if self.ssr_codes:
             ssr_code_str = ' '.join(self.ssr_codes)
 
-        return '{:d},{},,,{},{},{},\'{}\',{}Z,{}Z,{}'. \
+        return '{:d},{},,,{},{},{},[{}],{}Z,{}Z,{}'. \
             format(self.id, self.callsign, self.aircraft_address,
                    self.departure, self.destination, ssr_code_str,
                    self.positions[0].date_time.isoformat(),

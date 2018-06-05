@@ -21,8 +21,38 @@ MINIMUM_ARC_LENGTH = np.deg2rad(0.1 / 60.0)
 """ The minimum arc length in radians, 0.1 NM. """
 
 
+def find_extreme_point_along_track_index(arc, ecef_points, threshold):
+    """
+    Find the index of the point furthest along the Arc.
+
+    Parameters
+    ----------
+    arc: EcefArc
+        The Arc to compare the point to.
+
+    ecef_points: numpy array of EcefPoints
+        The points in ECEF coordinates.
+
+    threshold: float
+        The along track distance threshold.
+
+    Returns
+    -------
+        The index of the point furthest along the Arc if further than
+        threshold from the start or end of the Arc, otherwise zero.
+
+    """
+    atds = calculate_atds(arc, ecef_points)
+    max_atd = atds.max() - arc.length
+    min_atd = -atds.min()
+    if max(min_atd, max_atd) > threshold:
+        return atds.argmax() if min_atd < max_atd else atds.argmin()
+
+    return 0
+
+
 def find_extreme_point_index(ecef_points, first_index, last_index,
-                             threshold, xtd_ratio):
+                             threshold, xtd_ratio, calc_along_track):
     """
     The index of the point furthest from the Arc between first_index and
     last_index.
@@ -30,6 +60,8 @@ def find_extreme_point_index(ecef_points, first_index, last_index,
     If the Arc is longer than MINIMUM_ARC_LENGTH, it finds the point with the
     largest across track distance. If the distance is larger than threshold
     or xtd_ratio time the arc length, it returns the index of the point.
+    Otherwise, it calculates whether any points are beyond the end of the arc,
+    if so it returns the index of the furthest point.
 
     If the Arc is not longer than MINIMUM_ARC_LENGTH, if finds the furthest point
     the start. If the distance from the point to the start and end points is
@@ -56,7 +88,6 @@ def find_extreme_point_index(ecef_points, first_index, last_index,
     if ((last_index - first_index) > 1):
         arc = EcefArc(ecef_points[first_index], ecef_points[last_index])
         # first point is after arc start
-        # xtd_index = first_index + 1
         if arc.length > MINIMUM_ARC_LENGTH:
             # calculate cross track distances relative to the base arc
             xtds = calculate_xtds(arc, ecef_points[first_index + 1: last_index])
@@ -69,6 +100,12 @@ def find_extreme_point_index(ecef_points, first_index, last_index,
             if (np.abs(max_xtd) > xtd_threshold):
                 # if the point is further than the threshold, return it
                 max_xtd_index = first_index + xtd_index
+            elif calc_along_track:  # points are in-line
+                # test whether a point is past the start or end of the arc
+                atd_index = find_extreme_point_along_track_index(
+                    arc, ecef_points[first_index: last_index], MINIMUM_ARC_LENGTH)
+                if atd_index:
+                    max_xtd_index = first_index + xtd_index
         else:  # short arc
             # calculate the furthest point from the start point
             distance, xtd_index = \
@@ -84,7 +121,8 @@ def find_extreme_point_index(ecef_points, first_index, last_index,
     return max_xtd_index
 
 
-def find_extreme_point_indicies(ecef_points, threshold, *, xtd_ratio=0.1):
+def find_extreme_point_indicies(ecef_points, threshold, *,
+                                xtd_ratio=0.1, calc_along_track=False):
     """
     The indicies of the most extreme points including the first and last points.
 
@@ -118,7 +156,8 @@ def find_extreme_point_indicies(ecef_points, threshold, *, xtd_ratio=0.1):
         if threshold < distance:
             # calculate the index of the most extreme point
             index = find_extreme_point_index(ecef_points, start_index,
-                                             finish_index, threshold, xtd_ratio)
+                                             finish_index, threshold,
+                                             xtd_ratio, calc_along_track)
             last_index = finish_index
             last_indicies = []
             # loop until all extreme points found
@@ -138,7 +177,8 @@ def find_extreme_point_indicies(ecef_points, threshold, *, xtd_ratio=0.1):
 
                 # calculate the index of the next extreme point
                 index = find_extreme_point_index(ecef_points, start_index,
-                                                 last_index, threshold, xtd_ratio)
+                                                 last_index, threshold,
+                                                 xtd_ratio, calc_along_track)
 
     indicies = np.append(indicies, finish_index)
 
@@ -283,7 +323,7 @@ def calculate_turn_initiation_distance(prev_arc, arc, point,
     return min(distance, max_distance)
 
 
-def derive_horizontal_path(ecef_points, threshold):
+def derive_horizontal_path(ecef_points, threshold, calc_along_track=False):
     """
     Derive horizontal path waypoints and turn anticipation distances from
     ECEF points.
@@ -301,7 +341,8 @@ def derive_horizontal_path(ecef_points, threshold):
         The EcefPath between the ecef_points.
     """
     # Find extreme points and their indicies in the ecef_points array
-    indicies = find_extreme_point_indicies(ecef_points, threshold)
+    indicies = find_extreme_point_indicies(ecef_points, threshold,
+                                           calc_along_track=calc_along_track)
     extreme_points = ecef_points[[indicies]]
 
     # Calculate the Great Circle arc along the first route leg

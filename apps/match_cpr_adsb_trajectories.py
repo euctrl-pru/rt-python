@@ -20,11 +20,14 @@ from pru.logger import logger
 
 log = logger(__name__)
 
-DEFAULT_MATCHING_DISTANCE_THRESHOLD = 2.0
+DEFAULT_MATCHING_DISTANCE_THRESHOLD = 3.0
 'Maximum distance between points. Nautical Miles'
 
-DEFAULT_MATCHING_ALTITUDE_THRESHOLD = 500.0
-'Maximum altitude between points. Feet'
+DEFAULT_MATCHING_ALTITUDE_THRESHOLD = 50000.0
+"""
+Maximum altitude between points. Feet
+Note: currently set to 50,000 feet to disable altitude proximity testing.
+"""
 
 
 def verify_flight_matches(flight_matches, cpr_positions, adsb_positions,
@@ -239,6 +242,8 @@ def match_cpr_adsb_trajectories(filenames, distance_threshold=DEFAULT_MATCHING_D
     merge_aa_time = merge_aa.loc[(merge_aa.PERIOD_START_x <= merge_aa.PERIOD_FINISH_y) &
                                  (merge_aa.PERIOD_START_y <= merge_aa.PERIOD_FINISH_x)]
 
+    log.info('aircraft address time matches: %d', len(merge_aa_time))
+
     # verify aircraft address matches
     aa_matches = verify_flight_matches(merge_aa_time, cpr_points_df, adsb_points_df,
                                        cpr_flight_ids, adsb_flight_ids, merge_flight_ids,
@@ -250,6 +255,8 @@ def match_cpr_adsb_trajectories(filenames, distance_threshold=DEFAULT_MATCHING_D
     merge_cs = pd.merge(cpr_flights_df, adsb_flights_df, on='CALLSIGN')
     merge_cs_time = merge_cs.loc[(merge_cs.PERIOD_START_x <= merge_cs.PERIOD_FINISH_y) &
                                  (merge_cs.PERIOD_START_y <= merge_cs.PERIOD_FINISH_x)]
+
+    log.info('callsign time matches: %d', len(merge_cs_time))
 
     # verify callsign matches
     cs_matches = verify_flight_matches(merge_cs_time, cpr_points_df, adsb_points_df,

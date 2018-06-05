@@ -436,7 +436,11 @@ def get_processed(data_type, filenames, local_directory='.'):
         uncompress_result = [uncompress(local_directory + "/" + filename + ".bz2")
                              for filename in filenames]
         success, uncompressed_file_paths = map(list, zip(*uncompress_result))
-        return True
+        if success:
+            # delete the compressed processed files
+            compressed_file_paths = [filename + ".bz2" for filename in filenames]
+            [os.remove(file_path) for file_path in compressed_file_paths]
+        return success
     else:
         log.error("Either the data type was invalid or the path does not exist")
         return False

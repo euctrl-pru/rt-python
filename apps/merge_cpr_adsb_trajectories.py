@@ -95,8 +95,9 @@ def update_flight_data(flights_df, positions_df):
             flight_ids = positions['FLIGHT_ID'].drop_duplicates()
             flights_df.at[flight_id, 'SOURCE_IDS'] = flight_ids.values
 
-            ssr_codes = positions['SSR_CODE'].drop_duplicates()
-            flights_df.at[flight_id, 'SSR_CODES'] = ssr_codes.values
+            ssr_codes = positions['SSR_CODE'].drop_duplicates().values.tolist()
+            ssr_code_str = ' '.join(ssr_codes)
+            flights_df.at[flight_id, 'SSR_CODES'] = ''.join(['[', ssr_code_str, ']'])
 
             times = positions['TIME']
             start_time = times.iloc[0]

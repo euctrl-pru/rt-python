@@ -152,7 +152,7 @@ class AdsbFlight:
         if self.ssr_codes:
             ssr_code_str = ' '.join(self.ssr_codes)
 
-        return '{},{},{},{},{},{},{},\'{}\',{}Z,{}Z,[]'. \
+        return '{},{},{},{},{},{},{},[{}],{}Z,{}Z,[]'. \
             format(self.id, self.callsign, self.registration, self.aircraft_type,
                    self.aircraft_address,
                    self.departure, self.destination, ssr_code_str,

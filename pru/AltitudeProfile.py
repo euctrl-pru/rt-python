@@ -345,6 +345,57 @@ class AltitudeProfile:
 
         return min_alt, max_alt
 
+    def top_of_climb_index(self):
+        """
+        Determine the index of the top of climb altitude.
+
+        Returns
+        -------
+        The index of the first cruising altitude.
+
+        """
+        return self.altitudes.argmax()
+
+    def top_of_descent_index(self):
+        """
+        Determine the index of the top of climb altitude.
+
+        Returns
+        -------
+        The index of the last cruising altitude.
+
+        """
+        tod = self.altitudes.argmax()
+        # if the altitude profile is not just a climb
+        # and there is a cruising section
+        if (tod < len(self.altitudes) - 1) and \
+                (self.altitudes[tod] == self.altitudes[tod + 1]):
+            tod += 1
+
+        return tod
+
+    def top_of_climb_distance(self):
+        """
+        Determine the path distance of the top of climb altitude.
+
+        Returns
+        -------
+        The path distance of the first cruising altitude.
+
+        """
+        return self.distances[self.top_of_climb_index()]
+
+    def top_of_descent_distance(self):
+        """
+        Determine the path distance of the top of descent altitude.
+
+        Returns
+        -------
+        The path distance of the first cruising altitude.
+
+        """
+        return self.distances[self.top_of_descent_index()]
+
     def intersection_distances(self, altitude, start_distance, finish_distance):
         """
         Calculate distances where the profile is at the given altitude.

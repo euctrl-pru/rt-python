@@ -22,8 +22,33 @@ ROUTE_LONS = np.array([-1.0, -1.0, 1.0, 1.0, -1.0, -1.0,
 
 ACROSS_TRACK_TOLERANCE = np.deg2rad(0.25 / 60.0)
 
+NM = np.deg2rad(1.0 / 60.0)
+
 
 class TestHorizontlPathFunctions(unittest.TestCase):
+
+    def test_find_extreme_point_along_track_index(self):
+        # A line of Lat Longs around the Equator
+        LATITUDES = np.zeros(10, dtype=float)
+        LONGITUDES = np.array(range(-5, 5), dtype=float)
+        ecef_points_0 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+
+        # All points within arc
+        arc = EcefArc(ecef_points_0[0], ecef_points_0[-1])
+        index_0 = find_extreme_point_along_track_index(arc, ecef_points_0, 1.0 * NM)
+        self.assertEqual(index_0, 0)
+
+        # Point 2 before start of arc
+        LONGITUDES[2] = -6
+        ecef_points_1 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        index_1 = find_extreme_point_along_track_index(arc, ecef_points_1, 1.0 * NM)
+        self.assertEqual(index_1, 2)
+
+        # Point 8 past end of arc
+        LONGITUDES[8] = 8
+        ecef_points_2 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        index_2 = find_extreme_point_along_track_index(arc, ecef_points_2, 1.0 * NM)
+        self.assertEqual(index_2, 8)
 
     def test_find_extreme_point_index_1(self):
         # A line of Lat Longs around the Equator
@@ -35,28 +60,28 @@ class TestHorizontlPathFunctions(unittest.TestCase):
         max_index = 0
         result_0 = find_extreme_point_index(ecef_points_0, 0, max_index,
                                             threshold=ACROSS_TRACK_TOLERANCE,
-                                            xtd_ratio=0.1)
+                                            xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(result_0, max_index)
 
         # adjacent points
         max_index = 1
         result_1 = find_extreme_point_index(ecef_points_0, 0, max_index,
                                             threshold=ACROSS_TRACK_TOLERANCE,
-                                            xtd_ratio=0.1)
+                                            xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(result_1, max_index)
 
         # a point inbetween points
         max_index = 2
         result_2 = find_extreme_point_index(ecef_points_0, 0, max_index,
                                             threshold=ACROSS_TRACK_TOLERANCE,
-                                            xtd_ratio=0.1)
+                                            xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(result_2, max_index)
 
         # test toward the end
         max_index = 8
         max_index_0 = find_extreme_point_index(ecef_points_0, 2, max_index,
                                                threshold=ACROSS_TRACK_TOLERANCE,
-                                               xtd_ratio=0.1)
+                                               xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(max_index_0, max_index)
 
         # move some points alongside the arc
@@ -67,25 +92,25 @@ class TestHorizontlPathFunctions(unittest.TestCase):
         max_index = 2
         result_2 = find_extreme_point_index(ecef_points_1, 0, max_index,
                                             threshold=ACROSS_TRACK_TOLERANCE,
-                                            xtd_ratio=0.1)
+                                            xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(result_2, 1)
 
         max_index = 8
         max_index_1 = find_extreme_point_index(ecef_points_1, 0, max_index,
                                                threshold=ACROSS_TRACK_TOLERANCE,
-                                               xtd_ratio=0.1)
+                                               xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(max_index_1, 4)
 
         LATITUDES[4] = -1
         ecef_points_2 = calculate_EcefPoints(LATITUDES, LONGITUDES)
         max_index_2 = find_extreme_point_index(ecef_points_2, 2, max_index,
                                                threshold=ACROSS_TRACK_TOLERANCE,
-                                               xtd_ratio=0.1)
+                                               xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(max_index_2, 4)
 
         max_index_3 = find_extreme_point_index(ecef_points_2, 2, max_index,
                                                threshold=np.deg2rad(1.0),
-                                               xtd_ratio=0.1)
+                                               xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(max_index_3, 4)
 
         SHORT_LONGITUDES = np.array([-5 + i / 600.0 for i in range(10)], dtype=float)
@@ -93,7 +118,7 @@ class TestHorizontlPathFunctions(unittest.TestCase):
 
         max_index_4 = find_extreme_point_index(ecef_points_4, 2, max_index,
                                                threshold=ACROSS_TRACK_TOLERANCE,
-                                               xtd_ratio=0.1)
+                                               xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(max_index_2, 4)
 
     def test_find_extreme_point_index_2(self):
@@ -106,21 +131,21 @@ class TestHorizontlPathFunctions(unittest.TestCase):
         max_index = len(ecef_points_0) - 1
         result_0 = find_extreme_point_index(ecef_points_0, 0, max_index,
                                             threshold=ACROSS_TRACK_TOLERANCE,
-                                            xtd_ratio=0.1)
+                                            xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(result_0, 2)
 
         # first half
         max_index = 2
         result_1 = find_extreme_point_index(ecef_points_0, 0, max_index,
                                             threshold=ACROSS_TRACK_TOLERANCE,
-                                            xtd_ratio=0.1)
+                                            xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(result_1, 2)
 
         # second half
         max_index = len(ecef_points_0) - 1
         result_2 = find_extreme_point_index(ecef_points_0, 2, max_index,
                                             threshold=ACROSS_TRACK_TOLERANCE,
-                                            xtd_ratio=0.1)
+                                            xtd_ratio=0.1, calc_along_track=False)
         self.assertEqual(result_2, max_index)
 
     def test_find_extreme_point_indicies(self):

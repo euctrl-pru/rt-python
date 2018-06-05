@@ -15,7 +15,7 @@ from pru.trajectory_functions import calculate_delta_time, calculate_elapsed_tim
     calculate_speed, find_duplicate_values, max_delta
 from pru.AltitudeProfile import AltitudeProfile, AltitudeProfileType, \
     closest_cruising_altitude, find_cruise_sections, find_cruise_positions, \
-    set_cruise_altitudes, classify_altitude_profile
+    set_cruise_altitudes
 from pru.HorizontalPath import HorizontalPath
 from pru.TimeProfile import TimeProfile
 from pru.SmoothedTrajectory import SmoothedTrajectory
@@ -110,31 +110,104 @@ def analyse_altitudes(distances, altitudes, cruise_indicies):
     return AltitudeProfile(dists, alts), alt_sd, max_alt
 
 
-def calculate_ground_speeds(path_distances, elapsed_times):
+def moving_average(x, N):
     """
-    Calculate ground speeds in Knots from path distances and elapsed times.
+    Calculate the moving average or running mean of a numpy array.
+
+    It would use the pandas rolling_mean function. However, it's deprecated,
+    so it uses the rolling.mean functions on a Series instead.
+    @see https://stackoverflow.com/questions/13728392/moving-average-or-running-mean
+
+    Parameters
+    ----------
+    x: numpy float array
+        The values to smooth.
+
+    Returns
+    -------
+        The smoothed values
+        Note: the values at the start and end of the array are not smoothed.
+
+    """
+    if (N > 1) and (len(x) > N):
+        means = pd.Series(x)
+        M = N // 2
+        x[M:-M] = means.rolling(N, center=True).mean()[M:-M]
+
+    return x
+
+
+def moving_median(x, N):
+    """
+    Calculate the moving median of a numpy array.
+
+    Note: the moving median is robust to outliers than the moving average.
+    See: https://en.wikipedia.org/wiki/Moving_average
+
+    Parameters
+    ----------
+    x: numpy float array
+        The values to smooth.
+
+    Returns
+    -------
+        The smoothed values
+        Note: the values at the start and end of the array are not smoothed.
+
+    """
+    if (N > 1) and (len(x) > N):
+        means = pd.Series(x)
+        M = N // 2
+        x[M:-M] = means.rolling(N, center=True).median()[M:-M]
+
+    return x
+
+
+def calculate_ground_speeds(path_distances, elapsed_times, max_duration):
+    """
+    Calculate ground speeds considering the duration between positions.
+
+    It smooths speeds for positions that are within max_duration of each other.
 
     Parameters
     ----------
     path_distances: numpy float array
-        The path distances [Nautical Miles].
+        The distances along the path[Nautical Miles].
 
     elapsed_times: numpy float array
-        The elapsed times from the first point [Seconds].
+        The times from the first point [Seconds].
+
+    max_duration: float
+        The maximum duration to consider for smoothing [Seconds].
 
     Returns
     -------
-        The ground speeds [Knots].
-
+        The smoothed ground speeds [Knots].
     """
     leg_lengths = np.ediff1d(path_distances, to_begin=[0])
     durations = np.ediff1d(elapsed_times, to_begin=[0])
-    return calculate_speed(leg_lengths, durations)
+    speeds = calculate_speed(leg_lengths, durations)
+
+    # Consider the first speed outside of the loop
+    if (durations[1] < max_duration / 10.0):
+        speeds[1] = calculate_speed(leg_lengths[1] + leg_lengths[2],
+                                    durations[1] + durations[2])
+
+    for i in range(2, len(leg_lengths) - 1):
+        # if the durationis short and the speed is not between speeds either side
+        if durations[i] < max_duration and \
+            not (speeds[i - 1] <= speeds[i] <= speeds[i + 1]) or \
+           not (speeds[i - 1] >= speeds[i] >= speeds[i + 1]):
+            # calculate speed using the length and times either side
+            speeds[i] = calculate_speed(leg_lengths[i] + leg_lengths[i + 1],
+                                        durations[i] + durations[i + 1])
+
+    return speeds
 
 
-def smooth_times(path_distances, elapsed_times, *, max_duration=120.0):
+def smooth_times(path_distances, elapsed_times, max_duration, N):
     """
-    Smooth elapsed times by using a filter to smooth ground speeds
+    Smooth elapsed times using leg_lengths and smoothed ground speeds.
 
     Parameters
     ----------
@@ -145,36 +218,34 @@ def smooth_times(path_distances, elapsed_times, *, max_duration=120.0):
         The elapsed times from the first point [Seconds].
 
     max_duration: float
-        The maximum time between points to smooth, default 120 [Seconds].
+        The maximum time between points to smooth [Seconds].
+
+    N : integer
+        The number of samples to consider for the smoothing filters.
 
     Returns
     -------
-        The ground speeds [Knots].
+        The smnothed elapsed_times from the first position [seconds].
 
     """
+    speeds = calculate_ground_speeds(path_distances, elapsed_times, max_duration)
+
+    # Calculate the running mean of the speeds, if enabled and possible
+    # Note: first speed is zero, so not used to calculate average
+    if (N > 1) and (len(speeds) > N + 1):
+        speeds[1:] = moving_median(speeds[1:], N)
+        speeds[1:] = moving_average(speeds[1:], N)
+
+    # Calculate the durations between postions using the smoothed speeds
     leg_lengths = np.ediff1d(path_distances, to_begin=[0])
-    durations = np.ediff1d(elapsed_times, to_begin=[0])
-    new_durations = durations.copy()
-    speeds = calculate_speed(leg_lengths, durations)
-
-    # Consider the first point outside of the loop
-    if (durations[1] < max_duration / 10.0):
-        speeds[1] = calculate_speed(leg_lengths[1] + leg_lengths[2],
-                                    durations[1] + durations[2])
-        new_durations[1] = 3600.0 * leg_lengths[1] / speeds[1]
-
-    for i in range(2, len(path_distances) - 1):
-        if durations[i] < max_duration and \
-            not (speeds[i - 1] <= speeds[i] <= speeds[i + 1]) or \
-           not (speeds[i - 1] >= speeds[i] >= speeds[i + 1]):
-            speeds[i] = calculate_speed(leg_lengths[i] + leg_lengths[i + 1],
-                                        durations[i] + durations[i + 1])
-            new_durations[i] = 3600.0 * leg_lengths[i] / speeds[i]
+    new_durations = np.zeros(len(path_distances), dtype=float)
+    new_durations[1:] = 3600.0 * leg_lengths[1:] / speeds[1:]
 
     return np.cumsum(new_durations)
 
 
-def analyse_speeds(distances, times, duplicate_positions):
+def analyse_speeds(distances, times, duplicate_positions,
+                   max_duration=120.0, N=5):
     """
     Create an TimeProfile and quality metrics.
 
@@ -192,6 +263,12 @@ def analyse_speeds(distances, times, duplicate_positions):
     duplicate_positions: numpy bool array
         An array indicating duplicate distance positions.
 
+    max_duration: float
+        The maximum time between points to smooth, default 120 [Seconds].
+
+    N : integer
+        The number of samples to consider for the moving average filter, default 5.
+
     Returns
     -------
     TimeProfile: the time profile.
@@ -207,7 +284,7 @@ def analyse_speeds(distances, times, duplicate_positions):
     valid_distances = distances[~duplicate_positions]
 
     # Smooth the times
-    smoothed_times = smooth_times(valid_distances, elapsed_times)
+    smoothed_times = smooth_times(valid_distances, elapsed_times, max_duration, N)
 
     # Adjust for any offset introduced by smoothing
     delta_times = smoothed_times - elapsed_times
@@ -277,7 +354,7 @@ def analyse_times(distances, times, duplicate_positions, method=LM):
         time_sd, max_time_diff, max_time_index
 
 
-def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
+def analyse_trajectory(flight_id, points_df, across_track_tolerance, method):
     """
     Analyses and smooths positions in points_df.
 
@@ -358,7 +435,6 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
     # classify the trajectory altitude profile
     altitudes = sorted_df['altitude'].values
     cruise_indicies = find_cruise_sections(altitudes)
-    alt_profile_type = classify_altitude_profile(altitudes)
 
     # calculate standard deviation and maximum across track error
     xtds = path.calculate_cross_track_distances(sorted_df['points'].values,
@@ -384,6 +460,7 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method=LM):
 
     altp, alt_sd, max_alt = analyse_altitudes(sorted_path_distances, altitudes,
                                               cruise_indicies)
+    alt_profile_type = altp.type()
 
     return SmoothedTrajectory(flight_id, hpath, timep, altp), \
         [flight_id, int(alt_profile_type), position_period, int(unordered),
