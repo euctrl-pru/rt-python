@@ -31,25 +31,15 @@ DB_USER = 'db_user'
 REF_DB_USER = 'ref_db_user'
 
 
-# deployment = env.get("DEPLOYMENT")
-deployment = "unit"
+deployment = env.get("DEPLOYMENT_TYPE")
 
 # The geo db deployment for this container
 geo_db_port = env.get("AIRSPACE_DB_SERVICE_PORT")
 geo_db_hostname = env.get("AIRSPACE_DB_SERVICE_HOST")
 
-# Local test settings for geo db
-# geo_db_port = "31700"
-# geo_db_hostname = "192.168.0.12"
-
 # The ref db deployment for this container
 ref_db_port = env.get("REFERENCE_DB_SERVICE_PORT")
 ref_db_hostname = env.get("REFERENCE_DB_SERVICE_HOST")
-
-# Local test settings for ref db
-# ref_db_port = "31700"
-# ref_db_hostname = "192.168.0.12"
-
 
 username = deployment + '_user'
 adminname = deployment + '_admin'
@@ -71,43 +61,43 @@ CONTEXT = {'context_name': deployment,
                                    "user='postgres' " +
                                    "host=" + geo_db_hostname +
                                    " port=" + geo_db_port +
-                                   " password=" + "password",
+                                   " password=" + postgres_db_password,
            'connect_str_postgres_db': "dbname=" + dbname +
                                       " user='postgres' " +
                                       "host=" + geo_db_hostname +
                                       " port=" + geo_db_port +
-                                      " password=" + "password",
+                                      " password=" + postgres_db_password,
            'connect_str_db_admin': "dbname=" + dbname +
                                    " user=" + adminname +
                                    " host=" + geo_db_hostname +
                                    " port=" + geo_db_port +
-                                   " password=" + "password",
+                                   " password=" + postgres_db_password,
            'connect_str_db_user': "dbname=" + dbname +
                                   " user=" + username +
                                   " host=" + geo_db_hostname +
                                   " port=" + geo_db_port +
-                                  " password=" + "password",
+                                  " password=" + user_db_password,
            # REF DB CONNECTIONS
            'connect_str_ref_postgres': "dbname='postgres' " +
                                   "user='postgres' " +
                                   "host=" + ref_db_hostname +
                                   " port=" + ref_db_port +
-                                  " password=" + "password",
+                                  " password=" + postgres_db_password,
            'connect_str_ref_postgres_db': "dbname=" + dbname +
                                   " user='postgres' " +
                                   "host=" + ref_db_hostname +
                                   " port=" + ref_db_port +
-                                  " password=" + "password",
+                                  " password=" + postgres_db_password,
            'connect_str_ref_db_admin': "dbname=" + dbname +
                                   " user=" + adminname +
                                   " host=" + ref_db_hostname +
                                   " port=" + ref_db_port +
-                                  " password=" + "password",
+                                  " password=" + admin_db_password,
            'connect_str_ref_db_user': "dbname=" + dbname +
                                    " user=" + username +
                                    " host=" + ref_db_hostname +
                                    " port=" + ref_db_port +
-                                   " password=" + "password"}
+                                   " password=" + user_db_password}
 
 
 def get_connection(CONTEXT, connectionType):
