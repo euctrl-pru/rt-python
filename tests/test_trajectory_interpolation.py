@@ -11,7 +11,7 @@ from pru.EcefPoint import rad2nm
 from pru.EcefPath import PointType
 from pru.TimeProfile import TimeProfile
 from pru.AltitudeProfile import AltitudeProfile
-from pru.trajectory_analysis import analyse_trajectory
+from pru.trajectory_analysis import analyse_trajectory, MOVING_AVERAGE_SPEED
 from pru.trajectory_interpolation import *
 
 TEST_DATA_HOME = 'TEST_DATA_HOME'
@@ -51,25 +51,6 @@ DISTANCES = np.array([0., 27.171707 * NM, 76.922726 * NM,
 
 
 class TestTrajectoryInterpolation(unittest.TestCase):
-
-    def test_interpolate_time_profile_by_distance(self):
-        profile = TimeProfile(TIMES[0], DISTANCES, ELAPSED_TIMES)
-
-        distances_0 = np.array([0., 2 * NM, 8 * NM, DISTANCES[2]])
-        times_0 = interpolate_time_profile_by_distance(profile, distances_0)
-        self.assertEqual(len(times_0), len(distances_0))
-        self.assertEqual(times_0[0], ELAPSED_TIMES[0])
-        self.assertEqual(times_0[-1], ELAPSED_TIMES[2])
-
-    def test_interpolate_time_profile_by_elapsed_time(self):
-        profile = TimeProfile(TIMES[0], DISTANCES, ELAPSED_TIMES)
-
-        times_0 = np.array([0.0, 292.0, 500.0, 718.0])
-        distances_0 = interpolate_time_profile_by_elapsed_time(profile, times_0)
-        self.assertEqual(len(distances_0), len(times_0))
-        self.assertEqual(distances_0[0], DISTANCES[0])
-        assert_almost_equal(distances_0[2], 51.053368441692193 * NM)
-        self.assertEqual(distances_0[-1], DISTANCES[2])
 
     def test_calculate_interpolation_times(self):
 
@@ -134,11 +115,12 @@ class TestTrajectoryInterpolation(unittest.TestCase):
         flight_id = '123-456-7890'
         across_track_tolerance = 0.5
         traj, metrics = analyse_trajectory(flight_id, points_df,
-                                           across_track_tolerance)
+                                           across_track_tolerance,
+                                           MOVING_AVERAGE_SPEED)
 
         output_df = interpolate_trajectory_positions(traj, DEFAULT_STRAIGHT_INTERVAL,
                                                      DEFAULT_TURN_INTERVAL)
-        self.assertEqual(len(output_df), 805)
+        self.assertEqual(len(output_df), 850)
 
 
 if __name__ == '__main__':

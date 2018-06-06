@@ -23,6 +23,15 @@ from pru.SmoothedTrajectory import SmoothedTrajectory
 DEFAULT_ACROSS_TRACK_TOLERANCE = 0.5
 """ The default across track tolerance in Nautical Miles, 0.5 NM. """
 
+DEFAULT_MOVING_MEDIAN_SAMPLES = 5
+""" The number of samples for the moving median filter to consider. """
+
+DEFAULT_MOVING_AVERAGE_SAMPLES = 3
+""" The number of samples for the moving average filter to consider. """
+
+DEFAULT_SPEED_MAX_DURATION = 120.0
+""" The maximum time between positions for speed smoothing, seconds. """
+
 MOVING_AVERAGE_SPEED = 'mas'
 
 LM = 'lm'
@@ -205,9 +214,9 @@ def calculate_ground_speeds(path_distances, elapsed_times, max_duration):
     return speeds
 
 
-def smooth_times(path_distances, elapsed_times, max_duration, N):
+def smooth_times(path_distances, elapsed_times, N, M, max_duration):
     """
-    Smooth elapsed times using leg_lengths and smoothed ground speeds.
+    Smooth elapsed times by calculating and smoothing ground speeds.
 
     Parameters
     ----------
@@ -217,11 +226,16 @@ def smooth_times(path_distances, elapsed_times, max_duration, N):
     elapsed_times: numpy float array
         The elapsed times from the first point [Seconds].
 
+    N : integer
+        The number of samples to consider for the moving median filter.
+        It should be an odd positive number, 0 or 1 disables the filter.
+
+    M : integer
+        The number of samples to consider for the moving average filter.
+        It should be an odd positive number, 0 or 1 disables the filter.
+
     max_duration: float
         The maximum time between points to smooth [Seconds].
-
-    N : integer
-        The number of samples to consider for the smoothing filters.
 
     Returns
     -------
@@ -234,7 +248,8 @@ def smooth_times(path_distances, elapsed_times, max_duration, N):
     # Note: first speed is zero, so not used to calculate average
     if (N > 1) and (len(speeds) > N + 1):
         speeds[1:] = moving_median(speeds[1:], N)
-        speeds[1:] = moving_average(speeds[1:], N)
+    if (M > 1) and (len(speeds) > M + 1):
+        speeds[1:] = moving_average(speeds[1:], M)
 
     # Calculate the durations between postions using the smoothed speeds
     leg_lengths = np.ediff1d(path_distances, to_begin=[0])
@@ -245,7 +260,7 @@ def smooth_times(path_distances, elapsed_times, max_duration, N):
 
 
 def analyse_speeds(distances, times, duplicate_positions,
-                   max_duration=120.0, N=5):
+                   N=5, M=5, max_duration=DEFAULT_SPEED_MAX_DURATION):
     """
     Create an TimeProfile and quality metrics.
 
@@ -263,11 +278,14 @@ def analyse_speeds(distances, times, duplicate_positions,
     duplicate_positions: numpy bool array
         An array indicating duplicate distance positions.
 
+    N : integer
+        The number of samples to consider for the moving median filter, default 5.
+
+    M : integer
+        The number of samples to consider for the moving average filter, default 5.
+
     max_duration: float
         The maximum time between points to smooth, default 120 [Seconds].
-
-    N : integer
-        The number of samples to consider for the moving average filter, default 5.
 
     Returns
     -------
@@ -284,7 +302,7 @@ def analyse_speeds(distances, times, duplicate_positions,
     valid_distances = distances[~duplicate_positions]
 
     # Smooth the times
-    smoothed_times = smooth_times(valid_distances, elapsed_times, max_duration, N)
+    smoothed_times = smooth_times(valid_distances, elapsed_times, N, M, max_duration)
 
     # Adjust for any offset introduced by smoothing
     delta_times = smoothed_times - elapsed_times
@@ -354,7 +372,9 @@ def analyse_times(distances, times, duplicate_positions, method=LM):
         time_sd, max_time_diff, max_time_index
 
 
-def analyse_trajectory(flight_id, points_df, across_track_tolerance, method):
+def analyse_trajectory(flight_id, points_df, across_track_tolerance, method,
+                       N=DEFAULT_MOVING_MEDIAN_SAMPLES, M=DEFAULT_MOVING_AVERAGE_SAMPLES,
+                       max_duration=DEFAULT_SPEED_MAX_DURATION):
     """
     Analyses and smooths positions in points_df.
 
@@ -378,6 +398,18 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method):
 
     across_track_tolerance: float
         The maximum across track distance[Nautical Miles], default: 0.25 NM.
+
+    method: string
+        The smoothing method to use: 'mas', 'lm', 'trf' 'dogbox'
+
+    N : integer
+        The number of samples to consider for the speed moving median filter, default 5.
+
+    M : integer
+        The number of samples to consider for the speed moving average filter, default 5.
+
+    max_duration: float
+        The maximum time between points to smooth when calculating speed, default 120 [Seconds].
 
     Returns
     -------
@@ -455,14 +487,23 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method):
     else:
         timep, time_sd, max_time_diff, max_time_index = analyse_speeds(sorted_path_distances,
                                                                        sorted_df['time'].values,
-                                                                       duplicate_positions)
+                                                                       duplicate_positions,
+                                                                       N, M, max_duration)
     max_time_diff = abs(max_time_diff)
 
     altp, alt_sd, max_alt = analyse_altitudes(sorted_path_distances, altitudes,
                                               cruise_indicies)
     alt_profile_type = altp.type()
 
+    # Calculate average periods in the climb, cruise and descent phases
+    toc_distance = altp.top_of_climb_distance()
+    tod_distance = altp.top_of_descent_distance()
+
+    climb_period = timep.calculate_average_period(0.0, toc_distance)
+    cruise_period = timep.calculate_average_period(toc_distance, tod_distance)
+    descent_period = timep.calculate_average_period(tod_distance, timep.distances[-1])
+
     return SmoothedTrajectory(flight_id, hpath, timep, altp), \
-        [flight_id, int(alt_profile_type), position_period, int(unordered),
-         time_sd, max_time_diff, max_time_index,
-         xte_sd, max_xte, max_xte_index, alt_sd, max_alt]
+        [flight_id, int(alt_profile_type), position_period, climb_period,
+         cruise_period, descent_period, int(unordered), time_sd, max_time_diff,
+         max_time_index, xte_sd, max_xte, max_xte_index, alt_sd, max_alt]

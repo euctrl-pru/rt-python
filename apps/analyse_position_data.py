@@ -12,7 +12,8 @@ import csv
 import errno
 import pandas as pd
 from pru.trajectory_analysis import analyse_trajectory, DEFAULT_ACROSS_TRACK_TOLERANCE,\
-    MOVING_AVERAGE_SPEED
+    DEFAULT_MOVING_MEDIAN_SAMPLES, DEFAULT_MOVING_AVERAGE_SAMPLES, \
+    DEFAULT_SPEED_MAX_DURATION, MOVING_AVERAGE_SPEED
 from pru.trajectory_fields import POSITION_METRICS_FIELDS, BZ2_FILE_EXTENSION, \
     CSV_FILE_EXTENSION, JSON_FILE_EXTENSION, has_bz2_extension
 from pru.trajectory_files import POSITIONS, TRAJECTORIES, TRAJ_METRICS
@@ -28,11 +29,18 @@ DEFAULT_LOGGING_COUNT = 5000
 def analyse_position_data(filename,
                           across_track_tolerance=DEFAULT_ACROSS_TRACK_TOLERANCE,
                           time_method=MOVING_AVERAGE_SPEED,
+                          N=DEFAULT_MOVING_MEDIAN_SAMPLES,
+                          M=DEFAULT_MOVING_AVERAGE_SAMPLES,
+                          max_duration=DEFAULT_SPEED_MAX_DURATION,
                           logging_msg_count=DEFAULT_LOGGING_COUNT):
 
     log.info('positions file: %s', filename)
     log.info('across track tolerance: %f NM', across_track_tolerance)
     log.info('time analysis method: %s', time_method)
+    if time_method == MOVING_AVERAGE_SPEED:
+        log.info('moving median samples: %i', N)
+        log.info('moving average samples: %i', M)
+        log.info('speed filter maximum duration: %f', max_duration)
 
     raw_df = pd.DataFrame()
     try:
@@ -55,7 +63,8 @@ def analyse_position_data(filename,
         try:
             smoothed_traj, metrics = analyse_trajectory(flight_id, positions,
                                                         across_track_tolerance,
-                                                        time_method)
+                                                        time_method, N, M,
+                                                        max_duration)
             trajectories.append(smoothed_traj)
             quality_metrics.append(metrics)
 
@@ -84,7 +93,8 @@ def analyse_position_data(filename,
     try:
         with open(trajectory_filename, 'w') as file:
             file.write(dumps_SmoothedTrajectories(trajectories, time_method,
-                                                  across_track_tolerance))
+                                                  across_track_tolerance,
+                                                  N, M, max_duration))
     except EnvironmentError:
         log.error('could not write file: %s', trajectory_filename)
         return errno.EACCES
@@ -112,7 +122,9 @@ def analyse_position_data(filename,
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Usage: analyse_position_data.py <positions_filename>'
-              ' [across_track_tolerance] [time analysis method] [logging_msg_count]')
+              ' [across_track_tolerance] [time analysis method]'
+              ' [median_filter_samples] [average_filter_samples]'
+              ' [speed_max_duration] [logging_msg_count]')
         sys.exit(errno.EINVAL)
 
     positions_filename = sys.argv[1]
@@ -129,11 +141,28 @@ if __name__ == '__main__':
     if len(sys.argv) >= 4:
         time_method = sys.argv[3]
 
-    logging_msg_count = DEFAULT_LOGGING_COUNT
+    N = DEFAULT_MOVING_MEDIAN_SAMPLES
     if len(sys.argv) >= 5:
-        logging_msg_count = int(sys.argv[4])
+        N = int(sys.argv[4])
+
+    M = DEFAULT_MOVING_AVERAGE_SAMPLES
+    if len(sys.argv) >= 6:
+        M = int(sys.argv[5])
+
+    max_duration = DEFAULT_SPEED_MAX_DURATION
+    if len(sys.argv) >= 7:
+        try:
+            max_duration = float(sys.argv[6])
+        except ValueError:
+            log.error('invalid speed_max_duration: %s', sys.argv[6])
+            sys.exit(errno.EINVAL)
+
+    logging_msg_count = DEFAULT_LOGGING_COUNT
+    if len(sys.argv) >= 8:
+        logging_msg_count = int(sys.argv[7])
 
     error_code = analyse_position_data(sys.argv[1], across_track_tolerance,
-                                       time_method, logging_msg_count)
+                                       time_method, N, M, max_duration,
+                                       logging_msg_count)
     if error_code:
         sys.exit(error_code)

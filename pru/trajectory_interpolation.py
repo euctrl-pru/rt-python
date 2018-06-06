@@ -6,7 +6,6 @@ Functions to interpolate trajectory position data.
 
 import numpy as np
 import pandas as pd
-from scipy.interpolate import CubicSpline
 from .EcefPath import PointType, EcefPath
 from .ecef_functions import calculate_EcefPoints, calculate_LatLongs
 from .trajectory_functions import calculate_date_times, calculate_speed, \
@@ -43,8 +42,7 @@ def interpolate_time_profile_by_distance(timep, distances):
     times : float array
         The elapsed_times at the given distance values in [Seconds].
     """
-    cs = CubicSpline(timep.distances, timep.elapsed_times)
-    return cs(distances)
+    return timep.interpolate_by_distance(distances)
 
 
 def interpolate_time_profile_by_elapsed_time(timep, times):
@@ -68,8 +66,7 @@ def interpolate_time_profile_by_elapsed_time(timep, times):
     distances : float array
         The distances at the given time values in [Nautical Miles].
     """
-    cs = CubicSpline(timep.elapsed_times, timep.distances)
-    return cs(times)
+    return timep.interpolate_by_elapsed_time(times)
 
 
 def calculate_interpolation_times(point_times, point_types,
@@ -199,12 +196,11 @@ def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interv
 
     # Get the turn point distances from ecef_path
     point_distances, point_types = ecef_path.section_distances_and_types()
-    point_times = interpolate_time_profile_by_distance(smooth_traj.timep,
-                                                       point_distances)
+    point_times = smooth_traj.timep.interpolate_by_distance(point_distances)
     # insert times based on straight_interval and turn_interval
     times = calculate_interpolation_times(point_times, point_types,
                                           straight_interval, turn_interval)
-    distances = interpolate_time_profile_by_elapsed_time(smooth_traj.timep, times)
+    distances = smooth_traj.timep.interpolate_by_elapsed_time(times)
     altitudes = smooth_traj.altp.interpolate(distances)
 
     # calculate points at path disatnces

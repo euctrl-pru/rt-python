@@ -137,7 +137,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
         elapsed_times = calculate_elapsed_times(TIMES, TIMES[0])
         # print(elapsed_times)
 
-        smoothed_times = smooth_times(DISTANCES / NM, elapsed_times, 120.0, 3)
+        smoothed_times = smooth_times(DISTANCES / NM, elapsed_times, 5, 5, 120.0)
         self.assertEqual(len(smoothed_times), len(elapsed_times))
         # print(smoothed_times)
 

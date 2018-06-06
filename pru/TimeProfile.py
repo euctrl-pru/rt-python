@@ -7,6 +7,8 @@ A trajectory time profile.
 
 import numpy as np
 import json
+from scipy.interpolate import CubicSpline
+from .trajectory_functions import calculate_value_reference, calculate_value
 
 
 class TimeProfile:
@@ -36,6 +38,86 @@ class TimeProfile:
     def elapsed_times(self):
         'Accessor for the elapsed_times.'
         return self.__elapsed_times
+
+    def interpolate_by_distance(self, distances):
+        """
+        Interpolate elapsed_times at the distance values.
+
+        Uses the scipy.interpolate.CubicSpline function to interpolate
+        times at the required distances.
+
+        Parameters
+        ----------
+        timep: a TimeProfile
+            A TimeProfile object.
+
+        distances: float array
+            An ordered array of distances in [Nautical Miles].
+
+        Returns
+        -------
+        times : float array
+            The elapsed_times at the given distance values in [Seconds].
+        """
+        cs = CubicSpline(self.distances, self.elapsed_times)
+        return cs(distances)
+
+    def interpolate_by_elapsed_time(self, times):
+        """
+        Interpolate distances at the elapsed time values.
+
+        Uses the scipy.interpolate.CubicSpline function to interpolate
+        distances at the required elapsed times.
+
+        Parameters
+        ----------
+        timep: a TimeProfile
+            A TimeProfile object.
+
+        times: float array
+            An ordered array of elapsed_times in [Seconds].
+
+        Returns
+        -------
+
+        distances : float array
+            The distances at the given time values in [Nautical Miles].
+        """
+        cs = CubicSpline(self.elapsed_times, self.distances)
+        return cs(times)
+
+    def calculate_average_period(self, start_distance, finish_distance):
+        """
+        Calculate the average period between points between the distances.
+
+        Parameters
+        ----------
+        start_distance, finish_distance: float
+            The start and finish distances to cacluate the periods between in
+            [Nautical Miles].
+
+        Returns
+        -------
+        The average period between the points between the distances.
+        Zero if not enough points between the distances.
+
+        """
+        av_period = 0.0
+        if start_distance < finish_distance:
+            start_index, start_ratio = calculate_value_reference(self.distances,
+                                                                 start_distance)
+            finish_index, finish_ratio = calculate_value_reference(self.distances,
+                                                                   finish_distance)
+            delta_index = finish_index - start_index
+            if delta_index > 2:
+                # time of first point after start
+                first_time = calculate_value(self.elapsed_times, start_index + 1)
+                # time of last point before finish
+                last_time = calculate_value(self.elapsed_times, finish_index)
+                delta_time = last_time - first_time
+                av_period = delta_time / float(delta_index - 1)
+
+        return av_period
 
     def dumps(self):
         'Dump the TimeProfile to a JSON string'
