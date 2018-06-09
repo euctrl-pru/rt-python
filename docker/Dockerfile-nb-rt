@@ -74,7 +74,10 @@ COPY --chown=1000:100 tools $PROJECT_HOME/tools
 COPY --chown=1000:100 notebooks $PROJECT_HOME/notebooks
 COPY --chown=1000:100 config $PROJECT_HOME/config
 
-RUN chmod -R ugo+x $PROJECT_HOME/apps \
+# NOTE COPY --chown=1000:100 does not work, even though it's documented!!
+RUN chown -R 1000:100 $PRU_HOME \
+ && chown -R 1000:100 $PROJECT_HOME \
+ && chmod -R ugo+x $PROJECT_HOME/apps \
  && chmod -R ugo+x $PROJECT_HOME/tools \
  && chmod 777 $PROJECT_HOME/config/notebook-config.sh
 
