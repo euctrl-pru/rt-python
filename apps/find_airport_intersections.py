@@ -17,16 +17,20 @@ from pru.trajectory_airport_intersections import find_airport_intersection, \
     DEFAULT_RADIUS
 from pru.trajectory_fields import ISO8601_DATETIME_US_FORMAT,  BZ2_FILE_EXTENSION, \
     CSV_FILE_EXTENSION, JSON_FILE_EXTENSION, has_bz2_extension, \
-    read_iso8601_date_string, is_valid_iso8601_date
+    read_iso8601_date_string, is_valid_iso8601_date, AIRPORT_INTERSECTION_FIELDS
 from pru.trajectory_files import TRAJECTORIES, AIRPORT_INTERSECTIONS
 from pru.logger import logger
 
 
 log = logger(__name__)
 
+DEFAULT_LOGGING_COUNT = 5000
+""" The default number of flights between each log message. """
+
 
 def find_airport_intersections(flights_filename, trajectories_filename,
-                               radius=DEFAULT_RADIUS):
+                               radius=DEFAULT_RADIUS,
+                               logging_msg_count=DEFAULT_LOGGING_COUNT):
 
     # Extract the date string from the filename and validate it
     flights_date = read_iso8601_date_string(flights_filename)
@@ -79,34 +83,6 @@ def find_airport_intersections(flights_filename, trajectories_filename,
         log.error('could not read file: %s', trajectories_filename)
         return errno.ENOENT
 
-    airport_intersections = pd.DataFrame()
-    for smooth_traj in smoothed_trajectories:
-        try:
-            # TODO this should NOT need to be cast!
-            flight_id = int(smooth_traj.flight_id)
-            if flight_id in flights_df.index:
-
-                departure = flights_df.loc[flight_id, 'ADEP']
-                if departure:  # TODO test if an airport we're interested in
-                    dep_intersection = find_airport_intersection(smooth_traj,
-                                                                 departure,
-                                                                 radius, False)
-                    airport_intersections = pd.concat([airport_intersections,
-                                                       dep_intersection],
-                                                      ignore_index=True)
-
-                destination = flights_df.loc[flight_id, 'ADES']
-                if destination:  # TODO test if an airport we're interested in
-                    dest_intersection = find_airport_intersection(smooth_traj,
-                                                                  destination,
-                                                                  radius, True)
-                    airport_intersections = pd.concat([airport_intersections,
-                                                       dest_intersection],
-                                                      ignore_index=True)
-
-        except ValueError:
-            log.exception('find_airport_intersections id: %s', flight_id)
-
     trajectories_filename = os.path.basename(trajectories_filename)
     if is_bz2:  # remove the .bz2 from the end of the filename
         trajectories_filename = trajectories_filename[:-len(BZ2_FILE_EXTENSION)]
@@ -116,15 +92,50 @@ def find_airport_intersections(flights_filename, trajectories_filename,
     output_filename = output_filename.replace(JSON_FILE_EXTENSION,
                                               CSV_FILE_EXTENSION)
     try:
-        airport_intersections.to_csv(output_filename, index=False,
-                                     date_format=ISO8601_DATETIME_US_FORMAT)
-        log.info('written file: %s', output_filename)
+        file = open(output_filename, 'w')
+        file.write(AIRPORT_INTERSECTION_FIELDS)
+
+        flights_count = 0
+        for smooth_traj in smoothed_trajectories:
+            try:
+                flight_id = smooth_traj.flight_id
+                if flight_id in flights_df.index:
+
+                    departure = flights_df.loc[flight_id, 'ADEP']
+                    if departure:
+                        dep_intersection = find_airport_intersection(smooth_traj,
+                                                                     departure,
+                                                                     radius, False)
+                        if not dep_intersection.empty:
+                            dep_intersection.to_csv(output_filename, index=False,
+                                                    header=False, mode='a',
+                                                    date_format=ISO8601_DATETIME_US_FORMAT)
+
+                    destination = flights_df.loc[flight_id, 'ADES']
+                    if destination:
+                        dest_intersection = find_airport_intersection(smooth_traj,
+                                                                      destination,
+                                                                      radius, True)
+                        if not dest_intersection.empty:
+                            dest_intersection.to_csv(output_filename, index=False,
+                                                     header=False, mode='a',
+                                                     date_format=ISO8601_DATETIME_US_FORMAT)
+
+                    flights_count += 1
+                    if not (flights_count % logging_msg_count):
+                        log.info('%i trajectories processed', flights_count)
+
+            except ValueError:
+                log.exception('find_airport_intersections id: %s', flight_id)
+
+        file.close()
+
+        log.info('find_airport_intersections finished for %i trajectories!',
+                 flights_count)
 
     except EnvironmentError:
         log.error('could not write file: %s', output_filename)
         return errno.EACCES
-
-    log.info('airport intersections found')
 
     return 0
 
@@ -132,7 +143,7 @@ def find_airport_intersections(flights_filename, trajectories_filename,
 if __name__ == '__main__':
     if len(sys.argv) < 3:
         print('Usage: find_airport_intersections.py <flights_filename>'
-              ' <trajectories_filename> [radius]')
+              ' <trajectories_filename> [radius] [logging_msg_count]')
         sys.exit(errno.EINVAL)
 
     radius = DEFAULT_RADIUS
@@ -143,6 +154,11 @@ if __name__ == '__main__':
             log.error('invalid radius: %s', sys.argv[3])
             sys.exit(errno.EINVAL)
 
-    error_code = find_airport_intersections(sys.argv[1], sys.argv[2], radius)
+    logging_msg_count = DEFAULT_LOGGING_COUNT
+    if len(sys.argv) >= 5:
+        logging_msg_count = int(sys.argv[6])
+
+    error_code = find_airport_intersections(sys.argv[1], sys.argv[2],
+                                            radius, logging_msg_count)
     if error_code:
         sys.exit(error_code)
