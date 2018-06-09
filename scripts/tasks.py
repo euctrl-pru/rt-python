@@ -43,7 +43,9 @@ from pru.trajectory_files import DEFAULT_AIRPORTS_FILENAME, DEFAULT_STANDS_FILEN
     create_match_apds_input_filenames, \
     create_merge_apds_input_filenames, create_merge_apds_output_filenames
 from pru.trajectory_cleaning import DEFAULT_MAX_SPEED, DEFAULT_DISTANCE_ACCURACY
-from pru.trajectory_analysis import DEFAULT_ACROSS_TRACK_TOLERANCE, MOVING_AVERAGE_SPEED
+from pru.trajectory_analysis import DEFAULT_ACROSS_TRACK_TOLERANCE, MOVING_AVERAGE_SPEED, \
+    DEFAULT_MOVING_MEDIAN_SAMPLES, DEFAULT_MOVING_AVERAGE_SAMPLES, \
+    DEFAULT_SPEED_MAX_DURATION
 from pru.trajectory_interpolation import DEFAULT_STRAIGHT_INTERVAL, DEFAULT_TURN_INTERVAL
 from pru.trajectory_airport_intersections import DEFAULT_RADIUS
 
@@ -71,6 +73,9 @@ from apps.find_user_airspace_intersections import find_user_airspace_intersectio
 from pru.logger import logger
 
 log = logger(__name__)
+
+DEFAULT_LOGGING_COUNT = 5000
+""" The default number of flights between each log message. """
 
 
 def clean_raw_positions_data(source, date, max_speed=DEFAULT_MAX_SPEED,
@@ -418,7 +423,11 @@ def clean_overnight_cpr_fr24_positions(date, max_speed=DEFAULT_MAX_SPEED,
 
 def analyse_positions_on_date(date, source=CPR_FR24, *,
                               distance_tolerance=DEFAULT_ACROSS_TRACK_TOLERANCE,
-                              method=MOVING_AVERAGE_SPEED):
+                              time_method=MOVING_AVERAGE_SPEED,
+                              N=DEFAULT_MOVING_MEDIAN_SAMPLES,
+                              M=DEFAULT_MOVING_AVERAGE_SAMPLES,
+                              max_duration=DEFAULT_SPEED_MAX_DURATION,
+                              logging_msg_count=DEFAULT_LOGGING_COUNT):
     """
     Analyse refined CPR and FR24 ADS-B data for the given date.
 
@@ -433,8 +442,20 @@ def analyse_positions_on_date(date, source=CPR_FR24, *,
     distance_tolerance: float
         The maximum across track distance[Nautical Miles], default: 0.25 NM.
 
-    method: string
+    time_method: string
         The time analysis method, default 'lm'.
+
+    N : integer
+        The number of samples to consider for the speed moving median filter, default 5.
+
+    M : integer
+        The number of samples to consider for the speed moving average filter, default 5.
+
+    max_duration: float
+        The maximum time between points to smooth when calculating speed, default 120 [Seconds].
+
+    logging_msg_count : integer
+        The number of analysed flights between each log message.
 
     Returns
     -------
@@ -448,7 +469,7 @@ def analyse_positions_on_date(date, source=CPR_FR24, *,
     get_processed(source_path, [positions_filename])
 
     log.info("Analysing position data for file %s", positions_filename)
-    if analyse_position_data(positions_filename, distance_tolerance, method):
+    if analyse_position_data(positions_filename, distance_tolerance, time_method):
         return False
     gc.collect()
 
@@ -468,7 +489,8 @@ def analyse_positions_on_date(date, source=CPR_FR24, *,
 
 def interpolate_trajectory_file(trajectory_filename, source=CPR_FR24,
                                 straight_interval=DEFAULT_STRAIGHT_INTERVAL,
-                                turn_interval=DEFAULT_TURN_INTERVAL):
+                                turn_interval=DEFAULT_TURN_INTERVAL,
+                                logging_msg_count=DEFAULT_LOGGING_COUNT):
     """
     Interpolate a trajectories file for the given date.
 
@@ -495,7 +517,8 @@ def interpolate_trajectory_file(trajectory_filename, source=CPR_FR24,
     get_processed(source_path, [trajectory_filename])
 
     log.debug("Interpolating trajectories for file %s", trajectory_filename)
-    if interpolate_trajectories(trajectory_filename, straight_interval, turn_interval):
+    if interpolate_trajectories(trajectory_filename, straight_interval,
+                                turn_interval, logging_msg_count):
         return False
     gc.collect()
 
@@ -641,7 +664,8 @@ def merge_apds_trajectories_on_day(from_date, to_date, date):
     return ok
 
 
-def find_trajectory_sector_intersections(trajectory_filename, source=CPR_FR24):
+def find_trajectory_sector_intersections(trajectory_filename, source=CPR_FR24,
+                                         logging_msg_count=DEFAULT_LOGGING_COUNT):
     """
     """
     if not path_exists(trajectory_filename):
@@ -652,7 +676,7 @@ def find_trajectory_sector_intersections(trajectory_filename, source=CPR_FR24):
             return False
 
     log.info("find_sector_intersections for: %s", trajectory_filename)
-    if find_sector_intersections(trajectory_filename):
+    if find_sector_intersections(trajectory_filename, logging_msg_count):
         return False
 
     output_filename = trajectory_filename.replace(TRAJECTORIES, SECTOR_INTERSECTIONS)
@@ -664,7 +688,8 @@ def find_trajectory_sector_intersections(trajectory_filename, source=CPR_FR24):
 
 
 def find_trajectory_airport_intersections(trajectory_filename, source=CPR_FR24,
-                                          radius=DEFAULT_RADIUS):
+                                          radius=DEFAULT_RADIUS,
+                                          logging_msg_count=DEFAULT_LOGGING_COUNT):
     """
     """
     if not path_exists(trajectory_filename):
@@ -685,7 +710,8 @@ def find_trajectory_airport_intersections(trajectory_filename, source=CPR_FR24,
 
     log.info("find_sector_intersections for: %s and %s",
              flights_filename, trajectory_filename)
-    if find_airport_intersections(flights_filename, trajectory_filename, radius):
+    if find_airport_intersections(flights_filename, trajectory_filename,
+                                  radius, logging_msg_count):
         return False
 
     output_filename = trajectory_filename.replace(TRAJECTORIES, AIRPORT_INTERSECTIONS)
@@ -696,7 +722,8 @@ def find_trajectory_airport_intersections(trajectory_filename, source=CPR_FR24,
     return put_processed(intersections_path, [output_filename])
 
 
-def find_trajectory_user_airspace_intersections(trajectory_filename, source=CPR_FR24):
+def find_trajectory_user_airspace_intersections(trajectory_filename, source=CPR_FR24,
+                                                logging_msg_count=DEFAULT_LOGGING_COUNT):
     """
     """
     if not path_exists(trajectory_filename):
@@ -707,7 +734,7 @@ def find_trajectory_user_airspace_intersections(trajectory_filename, source=CPR_
             return False
 
     log.info("find_user_airspace_intersections for: %s", trajectory_filename)
-    if find_user_airspace_intersections(trajectory_filename):
+    if find_user_airspace_intersections(trajectory_filename, logging_msg_count):
         return False
 
     output_filename = trajectory_filename.replace(TRAJECTORIES, USER_INTERSECTIONS)
