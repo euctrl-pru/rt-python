@@ -197,19 +197,21 @@ def calculate_ground_speeds(path_distances, elapsed_times, max_duration):
     durations = np.ediff1d(elapsed_times, to_begin=[0])
     speeds = calculate_speed(leg_lengths, durations)
 
-    # Consider the first speed outside of the loop
-    if (durations[1] < max_duration / 10.0):
-        speeds[1] = calculate_speed(leg_lengths[1] + leg_lengths[2],
-                                    durations[1] + durations[2])
+    # if more than two legs
+    if len(leg_lengths) > 2:
+        # Consider the first speed outside of the loop
+        if (durations[1] < max_duration / 10.0):
+            speeds[1] = calculate_speed(leg_lengths[1] + leg_lengths[2],
+                                        durations[1] + durations[2])
 
-    for i in range(2, len(leg_lengths) - 1):
-        # if the durationis short and the speed is not between speeds either side
-        if durations[i] < max_duration and \
-            not (speeds[i - 1] <= speeds[i] <= speeds[i + 1]) or \
-           not (speeds[i - 1] >= speeds[i] >= speeds[i + 1]):
-            # calculate speed using the length and times either side
-            speeds[i] = calculate_speed(leg_lengths[i] + leg_lengths[i + 1],
-                                        durations[i] + durations[i + 1])
+        for i in range(2, len(leg_lengths) - 1):
+            # if the durationis short and the speed is not between speeds either side
+            if durations[i] < max_duration and \
+                not (speeds[i - 1] <= speeds[i] <= speeds[i + 1]) or \
+               not (speeds[i - 1] >= speeds[i] >= speeds[i + 1]):
+                # calculate speed using the length and times either side
+                speeds[i] = calculate_speed(leg_lengths[i] + leg_lengths[i + 1],
+                                            durations[i] + durations[i + 1])
 
     return speeds
 
