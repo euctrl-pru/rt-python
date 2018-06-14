@@ -24,6 +24,9 @@ from pru.logger import logger
 
 log = logger(__name__)
 
+AIRPORT_NAME_LENGTH = 4
+""" The length of an airport name. """
+
 DEFAULT_LOGGING_COUNT = 5000
 """ The default number of flights between each log message. """
 
@@ -101,23 +104,23 @@ def find_airport_intersections(flights_filename, trajectories_filename,
                 flight_id = smooth_traj.flight_id
                 if flight_id in flights_df.index:
 
-                    departure = flights_df.loc[flight_id, 'ADEP']
-                    if departure:
+                    departure = str(flights_df.loc[flight_id, 'ADEP'])
+                    if len(departure) == AIRPORT_NAME_LENGTH:
                         dep_intersection = find_airport_intersection(smooth_traj,
                                                                      departure,
                                                                      radius, False)
                         if not dep_intersection.empty:
-                            dep_intersection.to_csv(output_filename, index=False,
+                            dep_intersection.to_csv(file, index=False,
                                                     header=False, mode='a',
                                                     date_format=ISO8601_DATETIME_US_FORMAT)
 
-                    destination = flights_df.loc[flight_id, 'ADES']
-                    if destination:
+                    destination = str(flights_df.loc[flight_id, 'ADES'])
+                    if len(destination) == AIRPORT_NAME_LENGTH:
                         dest_intersection = find_airport_intersection(smooth_traj,
                                                                       destination,
                                                                       radius, True)
                         if not dest_intersection.empty:
-                            dest_intersection.to_csv(output_filename, index=False,
+                            dest_intersection.to_csv(file, index=False,
                                                      header=False, mode='a',
                                                      date_format=ISO8601_DATETIME_US_FORMAT)
 
