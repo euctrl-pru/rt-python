@@ -33,7 +33,7 @@ class Test_Geo_Operations(unittest.TestCase):
     Test cases against the geo support operations of the airspace model.
     """
 
-    def test_remove_db_then_create_and_initialise_sectors(self):
+    def test_remove_db_then_create(self):
         """
         Completely remove the geo db and recreate
         """
@@ -94,7 +94,7 @@ def suite():
     suite = unittest.TestSuite()
 
     # This test removes and recreates the database
-    suite.addTest(Test_Geo_Operations('test_remove_db_then_create_and_initialise_sectors'))
+    suite.addTest(Test_Geo_Operations('test_remove_db_then_create'))
     # Add the airports
     suite.addTest(Test_Geo_Init_Movement_Style_Airports('test_load_airports'))
 

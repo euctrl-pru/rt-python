@@ -122,7 +122,6 @@ class TestGISDBIntersectionsUser(unittest.TestCase):
         self.assertFalse(str(sector_1_id) in res2[2])
         connection.close()
 
-
     def test_not_found_user_sector_alt_range(self):
         """
         Check the raised exception when the db entry cannot be found
@@ -365,17 +364,20 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         # Flight terminates in the sector
         terminates = find_2D_airspace_intersections(*self.TERMINATES_FLIGHT)
         terminates_lats = terminates[0]
-        terminates_lons = terminates[0]
-        terminates_ids = terminates[0]
+        terminates_lons = terminates[1]
+        terminates_ids = terminates[2]
         self.assertEquals(1, len(terminates_lats))
         self.assertEquals(1, len(terminates_lons))
         self.assertEquals(1, len(terminates_ids))
+        sectors = find_airspace_by_database_ID(str(terminates_ids[0]), context, connection)
+        self.assertEquals(1, len(sectors))
+        self.assertEquals(sectors[0][6], 'Made Up Sector')
 
         # Flight transits the sector
         transits = find_2D_airspace_intersections(*self.TRANSIT_FLIGHT)
         transit_lats = transits[0]
-        transit_lons = transits[0]
-        transit_ids = transits[0]
+        transit_lons = transits[1]
+        transit_ids = transits[2]
         self.assertEquals(2, len(transit_lats))
         self.assertEquals(2, len(transit_lons))
         self.assertEquals(2, len(transit_ids))
@@ -383,8 +385,8 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         # Flight transits the sector above the sector
         transits = find_2D_airspace_intersections(*self.TRANSIT_TOO_HIGH_FLIGHT)
         transit_lats = transits[0]
-        transit_lons = transits[0]
-        transit_ids = transits[0]
+        transit_lons = transits[1]
+        transit_ids = transits[2]
         self.assertEquals(0, len(transit_lats))
         self.assertEquals(0, len(transit_lons))
         self.assertEquals(0, len(transit_ids))
@@ -392,8 +394,8 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         # Flight originates in the sector
         originates = find_2D_airspace_intersections(*self.ORIGINATES_FLIGHT)
         originates_lats = originates[0]
-        originates_lons = originates[0]
-        originates_ids = originates[0]
+        originates_lons = originates[1]
+        originates_ids = originates[2]
         self.assertEquals(2, len(originates_lats))
         self.assertEquals(2, len(originates_lons))
         self.assertEquals(2, len(originates_ids))
@@ -424,8 +426,8 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         # Transits the sector
         transits = find_2D_airspace_intersections(*self.TRANSITS_COMBE_FLIGHT)
         transit_lats = transits[0]
-        transit_lons = transits[0]
-        transit_ids = transits[0]
+        transit_lons = transits[1]
+        transit_ids = transits[2]
         self.assertEquals(6, len(transit_lats))
         self.assertEquals(6, len(transit_lons))
         self.assertEquals(6, len(transit_ids))
@@ -439,6 +441,200 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         self.assertEquals(6, len(origin_lats))
         self.assertEquals(6, len(origin_lons))
         self.assertEquals(6, len(origin_sector_ids))
+
+    def test_find_qudrant_intersections(self):
+        """
+        Test against a four section (quadrants) airspace.
+        See Trajectories Production Airspace Intersections Report Test
+        Sectors, page 18.
+        """
+        AC_ID_A1 = "990"
+        AV_AIRSPACE_ID_A1 = "SYNTHA1"
+        AV_ICAO_STATE_ID_A1 = "CS"
+        MIN_FLIGHT_LEVEL_A1 = "0"
+        MAX_FLIGHT_LEVEL_A1 = "200"
+        AV_NAME_A1 = "Square A1"
+        SECTOR_TYPE_A1 = "ES"
+        OBJECT_ID_A1 = 2399999
+        SECTOR_A1_WKT = "POLYGON Z (( 0.00000000 0.00000000 0.00000000, " + \
+                        "1.00000000 0.00000000 0.00000000, " + \
+                        "1.00000000 1.00000000 0.00000000, " + \
+                        "0.00000000 1.000000000 0.00000000, " + \
+                        "0.00000000 0.00000000 0.00000000))"
+
+        AC_ID_A2 = "989"
+        AV_AIRSPACE_ID_A2 = "SYNTHA2"
+        AV_ICAO_STATE_ID_A2 = "CS"
+        MIN_FLIGHT_LEVEL_A2 = "0"
+        MAX_FLIGHT_LEVEL_A2 = "200"
+        AV_NAME_A2 = "Square A2"
+        SECTOR_TYPE_A2 = "ES"
+        OBJECT_ID_A2 = 2399999
+        SECTOR_A2_WKT = "POLYGON Z (( 0.00000000 0.00000000 0.00000000, " + \
+                        "-1.000000000 0.000000000 0.00000000, " + \
+                        "-1.00000000 1.00000000 0.00000000, " + \
+                        "0.000000000 1.00000000 0.00000000, " + \
+                        "0.00000000 0.00000000 0.00000000))"
+
+        AC_ID_A3 = "979"
+        AV_AIRSPACE_ID_A3 = "SYNTHA3"
+        AV_ICAO_STATE_ID_A3 = "CS"
+        MIN_FLIGHT_LEVEL_A3 = "0"
+        MAX_FLIGHT_LEVEL_A3 = "200"
+        AV_NAME_A3 = "Square A3"
+        SECTOR_TYPE_A3 = "ES"
+        OBJECT_ID_A3 = 2399999
+        SECTOR_A3_WKT = "POLYGON Z (( 0.00000000 0.00000000 0.00000000, " + \
+                        "-1.000000000 0.000000000 0.00000000, " + \
+                        "-1.00000000 -1.00000000 0.00000000, " + \
+                        "0.000000000 -1.00000000 0.00000000, " + \
+                        "0.00000000 0.00000000 0.00000000))"
+
+        AC_ID_A4 = "969"
+        AV_AIRSPACE_ID_A4 = "SYNTHA4"
+        AV_ICAO_STATE_ID_A4 = "CS"
+        MIN_FLIGHT_LEVEL_A4 = "0"
+        MAX_FLIGHT_LEVEL_A4 = "200"
+        AV_NAME_A4 = "Square A3"
+        SECTOR_TYPE_A4 = "ES"
+        OBJECT_ID_A4 = 2399999
+        SECTOR_A4_WKT = "POLYGON Z (( 0.00000000 0.00000000 0.00000000, " + \
+                        "1.000000000 0.000000000 0.00000000, " + \
+                        "1.00000000 -1.00000000 0.00000000, " + \
+                        "0.000000000 -1.00000000 0.00000000, " + \
+                        "0.00000000 0.00000000 0.00000000))"
+
+        sector_A1 = [AC_ID_A1, AV_AIRSPACE_ID_A1, AV_ICAO_STATE_ID_A1, MIN_FLIGHT_LEVEL_A1,
+                     MAX_FLIGHT_LEVEL_A1, AV_NAME_A1, SECTOR_TYPE_A1, OBJECT_ID_A1,
+                     SECTOR_A1_WKT]
+
+        sector_A2 = [AC_ID_A2, AV_AIRSPACE_ID_A2, AV_ICAO_STATE_ID_A2, MIN_FLIGHT_LEVEL_A2,
+                     MAX_FLIGHT_LEVEL_A2, AV_NAME_A2, SECTOR_TYPE_A2, OBJECT_ID_A2,
+                     SECTOR_A2_WKT]
+
+        sector_A3 = [AC_ID_A3, AV_AIRSPACE_ID_A3, AV_ICAO_STATE_ID_A3, MIN_FLIGHT_LEVEL_A3,
+                     MAX_FLIGHT_LEVEL_A3, AV_NAME_A3, SECTOR_TYPE_A3, OBJECT_ID_A3,
+                     SECTOR_A3_WKT]
+
+        sector_A4 = [AC_ID_A4, AV_AIRSPACE_ID_A4, AV_ICAO_STATE_ID_A4, MIN_FLIGHT_LEVEL_A4,
+                     MAX_FLIGHT_LEVEL_A4, AV_NAME_A4, SECTOR_TYPE_A4, OBJECT_ID_A4,
+                     SECTOR_A4_WKT]
+
+        AC_ID_B1 = "990"
+        AV_AIRSPACE_ID_B1 = "SYNTHB1"
+        AV_ICAO_STATE_ID_1 = "CS"
+        MIN_FLIGHT_LEVEL_1 = "0"
+        MAX_FLIGHT_LEVEL_1 = "200"
+        AV_NAME_1 = "Square B1"
+        SECTOR_TYPE_1 = "ES"
+        OBJECT_ID_1 = 2399999
+        SECTOR_B1_WKT = "POLYGON Z (( 0.00000000 0.00000000 0.00000000, " + \
+                        "1.00000000 0.00000000 0.00000000, " + \
+                        "1.00000000 1.00000000 0.00000000, " + \
+                        "0.00000000 1.000000000 0.00000000, " + \
+                        "0.00000000 0.00000000 0.00000000))"
+
+        AC_ID_B2 = "989"
+        AV_AIRSPACE_ID_B2 = "SYNTHB2"
+        AV_ICAO_STATE_ID_2 = "CS"
+        MIN_FLIGHT_LEVEL_2 = "0"
+        MAX_FLIGHT_LEVEL_2 = "200"
+        AV_NAME_2 = "Square B2"
+        SECTOR_TYPE_2 = "ES"
+        OBJECT_ID_2 = 2399999
+        SECTOR_B2_WKT = "POLYGON Z (( 0.00000000 0.00000000 0.00000000, " + \
+                        "-1.000000000 0.000000000 0.00000000, " + \
+                        "-1.00000000 1.00000000 0.00000000, " + \
+                        "0.000000000 1.00000000 0.00000000, " + \
+                        "0.00000000 0.00000000 0.00000000))"
+
+        AC_ID_B3 = "979"
+        AV_AIRSPACE_ID_B3 = "SYNTHB3"
+        AV_ICAO_STATE_ID_3 = "CS"
+        MIN_FLIGHT_LEVEL_3 = "0"
+        MAX_FLIGHT_LEVEL_3 = "200"
+        AV_NAME_3 = "Square B3"
+        SECTOR_TYPE_3 = "ES"
+        OBJECT_ID_3 = 2399999
+        SECTOR_B3_WKT = "POLYGON Z (( 0.00000000 0.00000000 0.00000000, " + \
+                        "-1.000000000 0.000000000 0.00000000, " + \
+                        "-1.00000000 -1.00000000 0.00000000, " + \
+                        "0.000000000 -1.00000000 0.00000000, " + \
+                        "0.00000000 0.00000000 0.00000000))"
+
+        AC_ID_B4 = "969"
+        AV_AIRSPACE_ID_B4 = "SYNTHB4"
+        AV_ICAO_STATE_ID_4 = "CS"
+        MIN_FLIGHT_LEVEL_4 = "0"
+        MAX_FLIGHT_LEVEL_4 = "200"
+        AV_NAME_4 = "Square B4"
+        SECTOR_TYPE_4 = "ES"
+        OBJECT_ID_4 = 2399999
+        SECTOR_B4_WKT = "POLYGON Z (( 0.00000000 0.00000000 0.00000000, " + \
+                        "1.000000000 0.000000000 0.00000000, " + \
+                        "1.00000000 -1.00000000 0.00000000, " + \
+                        "0.000000000 -1.00000000 0.00000000, " + \
+                        "0.00000000 0.00000000 0.00000000))"
+
+        sector_B1 = [AC_ID_B1, AV_AIRSPACE_ID_B1, AV_ICAO_STATE_ID_1, MIN_FLIGHT_LEVEL_1,
+                     MAX_FLIGHT_LEVEL_1, AV_NAME_1, SECTOR_TYPE_1, OBJECT_ID_1,
+                     SECTOR_B1_WKT]
+
+        sector_B2 = [AC_ID_B2, AV_AIRSPACE_ID_B2, AV_ICAO_STATE_ID_2, MIN_FLIGHT_LEVEL_2,
+                     MAX_FLIGHT_LEVEL_2, AV_NAME_2, SECTOR_TYPE_2, OBJECT_ID_2,
+                     SECTOR_B2_WKT]
+        sector_B3 = [AC_ID_B3, AV_AIRSPACE_ID_B3, AV_ICAO_STATE_ID_3, MIN_FLIGHT_LEVEL_3,
+                     MAX_FLIGHT_LEVEL_3, AV_NAME_3, SECTOR_TYPE_3, OBJECT_ID_3,
+                     SECTOR_B3_WKT]
+
+        sector_B4 = [AC_ID_B4, AV_AIRSPACE_ID_B4, AV_ICAO_STATE_ID_4, MIN_FLIGHT_LEVEL_4,
+                     MAX_FLIGHT_LEVEL_4, AV_NAME_4, SECTOR_TYPE_4, OBJECT_ID_4,
+                     SECTOR_B4_WKT]
+
+        # test trajectory, southwest to north east
+        FLIGHT_ID_1 = "sw-ne"
+        MIN_ALT_1 = 0
+        MAX_ALT_1 = 600
+        LATS_1 = [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5]
+        LONS_1 = [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5]
+        FLIGHT_SW_NE = (FLIGHT_ID_1, LATS_1, LONS_1, MIN_ALT_1, MAX_ALT_1)
+
+        # test trajectory, south to north
+        FLIGHT_ID_2 = "s-n"
+        MIN_ALT_2 = 0
+        MAX_ALT_2 = 600
+        LATS_2 = [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5]
+        LONS_2 = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+        FLIGHT_S_N = (FLIGHT_ID_2, LATS_2, LONS_2, MIN_ALT_2, MAX_ALT_2)
+
+        connection = ctx.get_connection(ctx.CONTEXT, ctx.DB_USER)
+        context = ctx.CONTEXT
+
+        # Start with no sectors
+        remove_all_sectors()
+
+        ok1, sector_1_id = add_airspace_geometry(sector_B1, context, connection)
+        self.assertTrue(ok1)
+        ok2, sector_2_id = add_airspace_geometry(sector_B2, context, connection)
+        self.assertTrue(ok2)
+        ok3, sector_3_id = add_airspace_geometry(sector_B3, context, connection)
+        self.assertTrue(ok3)
+        ok4, sector_4_id = add_airspace_geometry(sector_B4, context, connection)
+        self.assertTrue(ok4)
+
+        quad_sectors = [sector_1_id, sector_2_id, sector_3_id, sector_4_id]
+
+        sector_b_sw_ne_intersections = find_2D_airspace_intersections(*FLIGHT_SW_NE)
+        # We should find six points of intersection, 1 at the sw corner, 4 in
+        # the middle and 1 at the ne corner.
+        self.assertEquals(6, len(sector_b_sw_ne_intersections[0]))
+
+        sector_b_s_n_intersections = find_2D_airspace_intersections(*FLIGHT_S_N)
+        # Should find 4 intersections, 1 at southern boundary,
+        # 2 in the common boundary and 1 at the northern boundary.
+        self.assertEquals(4, len(sector_b_s_n_intersections[0]))
+
+        # This last test indicates a problem in ordering.
 
 
 class TestGISDBFindIntersectionsUsersCylinders(unittest.TestCase):
@@ -610,6 +806,9 @@ def suite():
     # Test against a combe like sector with transit, originate and terminate trajectoris
     suite.addTest(TestGISDBIntersectionsStandardWithSegments('test_find_standard_sector_intersections_with_segments'))
 
+    # Test with the quadrant sectors described in the Trajectories Production Airspace Intersections Report
+    suite.addTest(TestGISDBIntersectionsStandardWithSegments('test_find_qudrant_intersections'))
+
     # Tests against the elementary sectors
     suite.addTest(TestGISDBIntersectionsStandard('test_find_standard_sector_intersections'))
 
@@ -630,12 +829,11 @@ def suite():
     suite.addTest(TestGISDBFindIntersectionsUsersCylinders('test_not_found_user_cylinder_sector_alt_range'))
     suite.addTest(TestGISDBFindIntersectionsUsersCylinders('test_not_found_user_cylinder_sector_description'))
 
-    # Tests against the airport intersections
+    # Tests against the airport intersections using csv input format
     suite.addTest(TestGISDBAirportIntersections('test_load_airports'))
     suite.addTest(TestGISDBAirportIntersections('test_find_airport_intersections'))
 
-    # TODO Does not work at the moment - need to change the database to accept
-    # this format
+    # Tests against the movement reporting airports input format
     suite.addTest(TestGISDBAirportIntersections('test_load_movement_reporting_airports'))
 
     # TODO NOT IN THE GEO DB INTERFACE NEEDS TO BE MOVED
