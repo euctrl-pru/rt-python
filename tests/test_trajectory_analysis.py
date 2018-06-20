@@ -173,7 +173,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
                                            MOVING_AVERAGE_SPEED)
         self.assertEqual(metrics[0], flight_id)
         self.assertEqual(metrics[1], int(AltitudeProfileType.CLIMBING_AND_DESCENDING))
-        self.assertEqual(metrics[3], 1)
+        self.assertEqual(metrics[6], 1)
         # print(metrics)
 
     def test_analyse_trajectory_3(self):
@@ -191,7 +191,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
                                            MOVING_AVERAGE_SPEED)
         self.assertEqual(metrics[0], flight_id)
         self.assertEqual(metrics[1], int(AltitudeProfileType.CLIMBING))
-        self.assertEqual(metrics[3], 1)
+        self.assertEqual(metrics[6], 1)
 
     def test_analyse_trajectory_4(self):
         test_data_home = env.get('TEST_DATA_HOME')
@@ -208,7 +208,7 @@ class TestTrajectorySmoothing(unittest.TestCase):
                                            MOVING_AVERAGE_SPEED)
         self.assertEqual(metrics[0], flight_id)
         self.assertEqual(metrics[1], int(AltitudeProfileType.CLIMBING))
-        self.assertEqual(metrics[3], 1)
+        self.assertEqual(metrics[6], 1)
 
 
 if __name__ == '__main__':
