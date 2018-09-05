@@ -7,7 +7,6 @@ import unittest
 import numpy as np
 import pandas as pd
 from numpy.testing import assert_almost_equal, assert_array_almost_equal
-from pru.EcefPoint import *
 from pru.ecef_functions import *
 
 GOLDEN_ANGLE = np.arctan(2.0)
@@ -101,19 +100,6 @@ class TestEcefFunctions(unittest.TestCase):
 
         # South Pole
         self.assertEqual(distances[11], np.pi)
-
-    def test_find_furthest_distance(self):
-        ecef_points = calculate_EcefPoints(PANDAS_ICOSAHEDRON['LAT'],
-                                           PANDAS_ICOSAHEDRON['LON'])
-
-        # Test North pole to South pole
-        distance1, index1 = find_furthest_distance(ecef_points)
-        self.assertEqual(index1, 11)
-
-        # Test around Northern Hemisphere
-        northern_points = ecef_points[range(1, 6)]
-        distance2, index2 = find_furthest_distance(northern_points)
-        self.assertEqual(index2, 2)
 
     def test_calculate_position(self):
         ecef_points = calculate_EcefPoints(PANDAS_ICOSAHEDRON['LAT'],
@@ -211,22 +197,6 @@ class TestEcefFunctions(unittest.TestCase):
 
         # South Pole
         self.assertEqual(atds[11], np.pi)
-
-    def test_find_most_extreme_value(self):
-        ecef_points = calculate_EcefPoints(PANDAS_ICOSAHEDRON['LAT'],
-                                           PANDAS_ICOSAHEDRON['LON'])
-        arc = EcefArc(ecef_points[3], ecef_points[8])
-        xtds = calculate_xtds(arc, ecef_points)
-
-        assert_almost_equal(xtds[3], 0.0)
-        assert_almost_equal(xtds[8], 0.0)
-
-        xtds_4_8 = xtds[3: 9]
-        self.assertEqual(len(xtds_4_8), 6)
-
-        max_xtd, max_xtd_index = find_most_extreme_value(xtds_4_8)
-        assert_almost_equal(max_xtd, 0.55357435)
-        self.assertEqual(max_xtd_index, 1)
 
     def test_calculate_EcefArcs(self):
         ecef_points = calculate_EcefPoints(PANDAS_ICOSAHEDRON['LAT'],

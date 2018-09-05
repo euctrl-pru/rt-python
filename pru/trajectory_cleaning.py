@@ -6,9 +6,9 @@ Functions to clean trajectory position data.
 
 import numpy as np
 from enum import IntEnum, unique
-from .EcefPoint import distance_nm
-from .ecef_functions import calculate_EcefPoints, calculate_leg_lengths
-from .trajectory_functions import calculate_elapsed_times, calculate_min_speed
+from via_sphere import global_Point3d, distance_radians
+from .trajectory_functions import calculate_elapsed_times, calculate_min_speed, \
+    rad2nm
 
 DEFAULT_MAX_SPEED = 750.0
 'The maximum speed between positions, Knots'
@@ -23,6 +23,7 @@ DEFAULT_TIME_PRECISION = 1.0
 @unique
 class ErrorCounts(IntEnum):
     """The indicies of the error array."""
+
     TOTAL = 0
     DUPLICATE_POSITIONS = 1
     INVALID_ADDRESSES = 2
@@ -35,7 +36,7 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
                            time_precision=DEFAULT_TIME_PRECISION,
                            find_invalid_addresses=True):
     """
-    Finds invalid positions in points_df.
+    Find invalid positions in points_df.
 
     The function searches for:
         - duplicate positions with an aircraft address,
@@ -67,7 +68,6 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
 
     Returns
     -------
-
     invalid_positions : numpy bool array
         Invalid postions are set to True in this array.
 
@@ -78,20 +78,21 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
             - number of invalid addresses
             - number of distance errors
             - number of altitude errors
+
     """
     # Duplicate positions with an aircraft address are invalid
     aircraft_address = points_df['AIRCRAFT_ADDRESS']
     invalid_positions = points_df.duplicated(
         subset=['TIME', 'LAT', 'LON', 'ALT',
                 'AIRCRAFT_ADDRESS', 'SSR_CODE']).values & \
-        (aircraft_address != '')
+        (aircraft_address != None)
 
     # get the number of duplicate_positions
     duplicate_positions = np.count_nonzero(invalid_positions)
 
     # Different aircraft addresses are invalid
     invalid_addresses = 0
-    aircraft_address = aircraft_address.loc[aircraft_address != '']
+    aircraft_address = aircraft_address.loc[aircraft_address != None]
     address_counts = aircraft_address.value_counts()
     if find_invalid_addresses and (len(address_counts) > 1):
         # More than one aircraft address, mark the extra addresses as invalid
@@ -101,8 +102,8 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
             invalid_positions |= invalid_addr
 
     # Calculate: positions, horizontal and vertical distances, etc.
-    ecef_points = calculate_EcefPoints(points_df['LAT'].values,
-                                       points_df['LON'].values)
+    ecef_points = global_Point3d(points_df['LAT'].values,
+                                 points_df['LON'].values)
     altitudes = points_df['ALT'].values
     times = calculate_elapsed_times(points_df['TIME'].values,
                                     points_df['TIME'].values[0])
@@ -118,7 +119,7 @@ def find_invalid_positions(points_df, *, max_speed=DEFAULT_MAX_SPEED,
         # Only consider valid positions
         if not invalid_positions.iloc[i]:
             # Calculate speed from previous known good position
-            distance = distance_nm(ecef_points[i], ecef_points[ref_i])
+            distance = rad2nm(distance_radians(ecef_points[i], ecef_points[ref_i]))
             delta_time = times[i] - times[ref_i]
             speed = calculate_min_speed(distance, delta_time,
                                         distance_accuracy, time_precision)

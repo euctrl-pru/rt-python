@@ -12,91 +12,120 @@ import sys
 import os
 import csv
 import errno
-import numpy as np
 import pandas as pd
+from io import StringIO
 from pru.trajectory_cleaning import find_invalid_positions, \
     DEFAULT_MAX_SPEED, DEFAULT_DISTANCE_ACCURACY
-from pru.trajectory_fields import POSITION_ERROR_FIELDS, \
-    ISO8601_DATETIME_FORMAT, BZ2_FILE_EXTENSION, has_bz2_extension
+from pru.trajectory_fields import POSITION_FIELDS, POSITION_ERROR_FIELDS, \
+    ISO8601_DATETIME_FORMAT, BZ2_FILE_EXTENSION, has_bz2_extension, \
+    CSV_FILE_EXTENSION
 from pru.trajectory_files import RAW, POSITIONS, ERROR_METRICS
+from pru.trajectory_functions import generate_positions
 from pru.logger import logger
 
 log = logger(__name__)
 
+POSITION_FIELD_NAMES = POSITION_FIELDS[:-1].split(',')
+"""The position fields for the pandas Dataframe."""
 
-def clean_position_data(positions_filename, max_speed=DEFAULT_MAX_SPEED,
+
+def clean_position_data(filename, max_speed=DEFAULT_MAX_SPEED,
                         distance_accuracy=DEFAULT_DISTANCE_ACCURACY):
+    """
+    Identify and remove invalid postions in a positions file.
 
-    log.info('positions file: %s', positions_filename)
-    log.info('Max speed: %f Knots', max_speed)
-    log.info('Distance accuracy: %f NM', distance_accuracy)
+    Outputs a positions file with "raw_" stripped from the start of the
+    filename and an error metrics file.
 
-    # Read the positions into a pandas DataFrame
-    raw_df = pd.DataFrame()
-    try:
-        raw_df = pd.read_csv(positions_filename, parse_dates=['TIME'],
-                             memory_map=True)
-        log.info('positions file read ok')
+    Parameters
+    ----------
+    filename: a string
+        The name of the raw positions file.
 
-    except EnvironmentError:
-        log.error('could not read file: %s', positions_filename)
-        sys.exit(errno.ENOENT)
+    max_speed: float
+        The maximum speed betwen valid positions [Knots].
+        Default: DEFAULT_MAX_SPEED.
 
-    # A list to hold the error_metrics
-    error_metrics = []
-    # A numpy array to hold the invalid_positions
-    invalid_positions = np.empty(0, dtype=bool)
+    distance_accuracy: float
+        The accuracy of the positions [Nautical Miles].
 
-    raw_df.sort_values(by=['FLIGHT_ID', 'TIME'], inplace=True)
-    for flight_id, positions in raw_df.groupby('FLIGHT_ID'):
-        try:
-            invalid_pos, metrics = find_invalid_positions(positions,
-                                                          max_speed=max_speed,
-                                                          distance_accuracy=distance_accuracy)
-            invalid_positions = np.append(invalid_positions, invalid_pos)
-            metrics.insert(0, flight_id)
-            error_metrics.append(metrics)
+    Returns
+    -------
+    An errno error_code if an error occured, zero otherwise.
 
-        except (ValueError, TypeError):
-            log.exception('find_invalid_positions flight id: %s', flight_id)
-
-    # Extract the valid trajectory positions DataFrame
-    valid_positions = raw_df[~invalid_positions]
-
-    log.info('find_invalid_positions finished')
-
+    """
+    positions_filename = os.path.basename(filename)
     is_bz2 = has_bz2_extension(positions_filename)
     if is_bz2:  # remove the .bz2 from the end of the filename
         positions_filename = positions_filename[:-len(BZ2_FILE_EXTENSION)]
 
+    if positions_filename[-len(CSV_FILE_EXTENSION):] != CSV_FILE_EXTENSION:
+        log.error(f'Invalid file type: {positions_filename}, must be a CSV file.')
+        return errno.EINVAL
+
+    log.info(f'positions file: {positions_filename}')
+    log.info(f'Max speed: {max_speed} Knots')
+    log.info(f'Distance accuracy: {distance_accuracy} NM')
+
+    ##########################################################################
+    # Create output filenames
+
     # strip raw_ from the start of the positions_filename
     output_filename = os.path.basename(positions_filename)[len(RAW) + 1:]
-    # and write the valid trajectory positions DataFrame as a csv file
-    try:
-        valid_positions.to_csv(output_filename, index=False,
-                               date_format=ISO8601_DATETIME_FORMAT)
-
-        log.info('written file: %s', output_filename)
-
-    except EnvironmentError:
-        log.error('could not write file: %s', output_filename)
-        sys.exit(errno.EACCES)
 
     error_metrics_filename = output_filename.replace(POSITIONS, ERROR_METRICS)
-    try:
-        with open(error_metrics_filename, 'w') as file:
-            file.write(POSITION_ERROR_FIELDS)
-            writer = csv.writer(file, lineterminator='\n')
-            writer.writerows(error_metrics)
 
-    except EnvironmentError:
-        log.error('could not write file: %s', error_metrics_filename)
-        sys.exit(errno.EACCES)
+    ##########################################################################
+    # Process the positions
 
-    log.info('written file: %s', error_metrics_filename)
+    flights_count = 0
+    with open(output_filename, 'w') as output_file, \
+            open(error_metrics_filename, 'w') as error_file:
+        output_file.write(POSITION_FIELDS)
 
-    log.info('positions cleaned')
+        error_file.write(POSITION_ERROR_FIELDS)
+        error_writer = csv.writer(error_file, lineterminator='\n')
 
+        try:
+            flight_positions = generate_positions(positions_filename)
+            for position_lines in flight_positions:
+                fields = position_lines[0].split(',')
+                flight_id = fields[0]
+                try:
+                    position_string = ''.join(position_lines)
+                    positions = pd.read_csv(StringIO(position_string),
+                                            header=None, names=POSITION_FIELD_NAMES,
+                                            parse_dates=['TIME'])
+
+                    invalid_positions, error_metrics = \
+                        find_invalid_positions(positions,
+                                               max_speed=max_speed,
+                                               distance_accuracy=distance_accuracy)
+
+                    valid_positions = positions[~invalid_positions]
+                    valid_positions.to_csv(output_file, index=False,
+                                           header=False, mode='a',
+                                           date_format=ISO8601_DATETIME_FORMAT)
+
+                    error_metrics.insert(0, flight_id)
+                    error_writer.writerow(error_metrics)
+
+                    flights_count += 1
+
+                except (ValueError, TypeError):
+                    log.exception(f'find_invalid_positions flight id: {flight_id}')
+
+                except StopIteration:
+                    pass
+
+            log.info(f'written file: {output_filename}')
+            log.info(f'written file: {error_metrics_filename}')
+
+        except EnvironmentError:
+            log.error(f'could not read file: {positions_filename}')
+            return errno.ENOENT
+
+    log.info(f'positions cleaned for {flights_count} flights')
     return 0
 
 
@@ -108,11 +137,19 @@ if __name__ == '__main__':
 
     max_speed = DEFAULT_MAX_SPEED
     if len(sys.argv) >= 3:
-        max_speed = float(sys.argv[2])
+        try:
+            max_speed = float(sys.argv[2])
+        except ValueError:
+            log.error(f'invalid max_speed: {sys.argv[2]}')
+            sys.exit(errno.EINVAL)
 
     distance_accuracy = DEFAULT_DISTANCE_ACCURACY
     if len(sys.argv) >= 4:
-        distance_accuracy = float(sys.argv[3])
+        try:
+            distance_accuracy = float(sys.argv[3])
+        except ValueError:
+            log.error(f'invalid distance_accuracy: { sys.argv[3]}')
+            sys.exit(errno.EINVAL)
 
     error_code = clean_position_data(sys.argv[1], max_speed, distance_accuracy)
     if error_code:

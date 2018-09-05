@@ -6,6 +6,7 @@
 import unittest
 import numpy as np
 from numpy.testing import assert_almost_equal, assert_array_almost_equal
+from via_sphere import global_Point3d
 from pru.AltitudeProfile import AltitudeProfile
 from pru.AirspaceVolume import AirspaceVolume
 from pru.HorizontalPath import HorizontalPath
@@ -56,6 +57,25 @@ class TestAirspaceIntersections(unittest.TestCase):
 
         result = set_exit_flags(ids_1)
         assert_array_almost_equal(result, exits)
+
+    def test_calculate_2D_intersection_distances(self):
+        path_0 = HorizontalPath(ROUTE_LATS, ROUTE_LONS, TURN_DISTANCES)
+
+        LATS = np.array([20. / 60.,  40. / 60., 60. / 60.])
+        LONS = np.zeros(3, dtype=float)
+        intersection_points = global_Point3d(LATS, LONS)
+        sector_ids = ['2', '3', '1']
+        start_distance = 0.
+        distances_1 = calculate_2D_intersection_distances(path_0.ecef_path(),
+                                                          intersection_points,
+                                                          sector_ids, start_distance)
+        self.assertEqual(len(distances_1), 3)
+
+        start_distance = 20.
+        distances_2 = calculate_2D_intersection_distances(path_0.ecef_path(),
+                                                          intersection_points,
+                                                          sector_ids, start_distance)
+        self.assertEqual(len(distances_2), 3)
 
     def test_calculate_3D_intersection_distances(self):
         alt_p = ALTITUDE_PROFILE
@@ -131,10 +151,11 @@ class TestAirspaceIntersections(unittest.TestCase):
 
         traj_0 = SmoothedTrajectory('123-456-789', path_0, timep_0, altp_0)
 
-        LATS = np.array([0.,  20. / 60.,  20. / 60., 20. / 60.])
+        LATS = np.array([0.,  20. / 60.,  40. / 60., 60. / 60.])
         LONS = np.zeros(4, dtype=float)
         sector_ids = ['1', '2', '3', '1']
-        df_3d = find_3D_airspace_intersections(traj_0, LATS, LONS,
+        points_0 = global_Point3d(LATS, LONS)
+        df_3d = find_3D_airspace_intersections(traj_0, path_0.ecef_path(), points_0,
                                                sector_ids, SECTORS)
         self.assertEqual(df_3d.shape[0], 6)
 
@@ -154,10 +175,11 @@ class TestAirspaceIntersections(unittest.TestCase):
 
         traj_0 = SmoothedTrajectory('123-456-789', path_0, timep_0, alt_p)
 
-        LATS = np.array([0.,  20. / 60.,  20. / 60., 20. / 60.])
+        LATS = np.array([0.,  20. / 60.,  40. / 60., 60. / 60.])
         LONS = np.zeros(4, dtype=float)
         sector_ids = ['1', '2', '3', '1']
-        df_3d = find_3D_airspace_intersections(traj_0, LATS, LONS,
+        points_0 = global_Point3d(LATS, LONS)
+        df_3d = find_3D_airspace_intersections(traj_0, path_0.ecef_path(), points_0,
                                                sector_ids, SECTORS)
         self.assertEqual(df_3d.shape[0], 0)
 

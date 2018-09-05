@@ -4,15 +4,13 @@
 Functions to smooth trajectory position data.
 """
 
-from enum import IntEnum, unique
 import numpy as np
 import pandas as pd
 import scipy.optimize
-from pru.EcefPoint import rad2nm
-from pru.horizontal_path_functions import derive_horizontal_path
-from pru.ecef_functions import calculate_EcefPoints, find_most_extreme_value
+from via_sphere import global_Point3d
+from pru.spherical_path_functions import derive_horizontal_path
 from pru.trajectory_functions import calculate_delta_time, calculate_elapsed_times, \
-    calculate_speed, find_duplicate_values, max_delta
+    calculate_speed, find_duplicate_values, max_delta, rad2nm, find_most_extreme_value
 from pru.AltitudeProfile import AltitudeProfile, AltitudeProfileType, \
     closest_cruising_altitude, find_cruise_sections, find_cruise_positions, \
     set_cruise_altitudes
@@ -48,7 +46,6 @@ def calculate_cruise_delta_alts(altitudes, cruise_indicies):
 
     Parameters
     ----------
-
     altitudes: float array
         An array of altitudes [feet]
 
@@ -57,10 +54,11 @@ def calculate_cruise_delta_alts(altitudes, cruise_indicies):
 
     Returns
     -------
-        A numpy array of differences between altitudes and the cruising
-        altitiude while the aircraft was cruising.
+    A numpy array of differences between altitudes and the cruising
+    altitiude while the aircraft was cruising.
 
-        The array will be empty if there are no cruising sections.
+    The array will be empty if there are no cruising sections.
+
     """
     cruise_deltas = np.empty(0, dtype=float)
 
@@ -100,6 +98,7 @@ def analyse_altitudes(distances, altitudes, cruise_indicies):
 
     alt_sd: the standard deviation of the cruising altitude error.
     max_alt: the maximum cruising altitude error.
+
     """
     alt_sd = 0.0
     max_alt = 0.0
@@ -192,6 +191,7 @@ def calculate_ground_speeds(path_distances, elapsed_times, max_duration):
     Returns
     -------
         The smoothed ground speeds [Knots].
+
     """
     leg_lengths = np.ediff1d(path_distances, to_begin=[0])
     durations = np.ediff1d(elapsed_times, to_begin=[0])
@@ -296,6 +296,7 @@ def analyse_speeds(distances, times, duplicate_positions,
     time_sd: the time standard deviation.
 
     max_time_diff: the maximum time difference.
+
     """
     # calculate time differences from non-duplicate positions
     elapsed_times = calculate_elapsed_times(times[~duplicate_positions], times[0])
@@ -346,6 +347,7 @@ def analyse_times(distances, times, duplicate_positions, method=LM):
     time_sd: the time standard deviation.
 
     max_time_diff: the maximum time difference.
+
     """
     # calculate time differences from non-duplicate positions
     elapsed_times = calculate_elapsed_times(times[~duplicate_positions], times[0])
@@ -415,17 +417,14 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method,
 
     Returns
     -------
-
     smoothed_trajectoy: SmoothedTrajectory
         The SmoothedTrajectory containing the flight id, smoothed horizontal path,
         time profile and altitude profile.
 
     metrics: list
         A list containing the flight id and trajectory quality metrics.
-    """
-    if len(points_df) < 2:
-        raise ValueError('Trajectory only has one point!')
 
+    """
     # calculate the position period as seconds per point
     times = points_df['TIME'].values
     duration = calculate_delta_time(times[0], times[-1])
@@ -433,13 +432,17 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method,
 
     # convert across_track_tolerance to radians
     across_track_radians = np.deg2rad(across_track_tolerance / 60.0)
-
-    ecef_points = calculate_EcefPoints(points_df['LAT'].values,
-                                       points_df['LON'].values)
+    ecef_points = global_Point3d(points_df['LAT'].values,
+                                 points_df['LON'].values)
 
     # derive the EcefPath
     path = derive_horizontal_path(ecef_points, across_track_radians)
     horizontal_path_distances = rad2nm(path.path_distances())
+
+    # Ensure that the path is long enough
+    if horizontal_path_distances[-1] < across_track_tolerance:
+        raise ValueError("Path is short")
+
     lats, lons = path.point_lat_longs()
     tads = path.turn_initiation_distances_nm()
     hpath = HorizontalPath(lats, lons, tads)
@@ -471,8 +474,8 @@ def analyse_trajectory(flight_id, points_df, across_track_tolerance, method,
     cruise_indicies = find_cruise_sections(altitudes)
 
     # calculate standard deviation and maximum across track error
-    xtds = path.calculate_cross_track_distances(sorted_df['points'].values,
-                                                sorted_path_distances)
+    xtds = path.calculate_cross_track_distances(ecef_points,
+                                                path_distances)
     xte_sd = xtds.std()
     max_xte, max_xte_index = find_most_extreme_value(xtds)
     max_xte = abs(max_xte)

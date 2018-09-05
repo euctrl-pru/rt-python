@@ -177,6 +177,45 @@ class TestTrajectoryFiles(unittest.TestCase):
         self.assertEqual(names[2], 'cpr_fr24_positions_2017-07-31.csv')
         self.assertEqual(names[3], 'cpr_fr24_positions_2017-08-01.csv')
 
+    def test_create_match_overnight_flights_input_filenames(self):
+        test_date = '2017-08-01'
+        names = create_match_overnight_flights_input_filenames(test_date)
+        self.assertEqual(names[0], 'cpr_fr24_flights_2017-07-31.csv')
+        self.assertEqual(names[1], 'cpr_fr24_flights_2017-08-01.csv')
+
+    def test_create_extract_overnight_data_input_filenames(self):
+        test_date = '2017-08-01'
+        names = create_extract_overnight_data_input_filenames(test_date)
+        self.assertEqual(names[0], 'prev_day_matching_ids_2017-08-01.csv')
+        self.assertEqual(names[1], 'cpr_fr24_flights_2017-08-01.csv')
+        self.assertEqual(names[2], 'cpr_fr24_positions_2017-08-01.csv')
+        self.assertEqual(names[3], 'cpr_fr24_events_2017-08-01.csv')
+
+    def test_create_extract_overnight_data_output_filenames(self):
+        test_date = '2017-08-01'
+        names = create_extract_overnight_data_output_filenames(test_date)
+        self.assertEqual(names[0], 'new_cpr_fr24_flights_2017-08-01.csv')
+        self.assertEqual(names[1], 'new_cpr_fr24_positions_2017-08-01.csv')
+        self.assertEqual(names[2], 'new_cpr_fr24_events_2017-08-01.csv')
+        self.assertEqual(names[3], 'overnight_cpr_fr24_positions_2017-07-31.csv')
+        self.assertEqual(names[4], 'overnight_cpr_fr24_events_2017-07-31.csv')
+
+    def test_create_merge_overnight_flight_data_input_filenames(self):
+        test_date = '2017-08-01'
+        names = create_merge_overnight_flight_data_input_filenames(test_date)
+        self.assertEqual(names[0], 'new_cpr_fr24_flights_2017-08-01.csv')
+        self.assertEqual(names[1], 'new_cpr_fr24_positions_2017-08-01.csv')
+        self.assertEqual(names[2], 'overnight_cpr_fr24_positions_2017-08-01.csv')
+        self.assertEqual(names[3], 'new_cpr_fr24_events_2017-08-01.csv')
+        self.assertEqual(names[4], 'overnight_cpr_fr24_events_2017-08-01.csv')
+
+    def test_create_merge_overnight_flight_data_output_filenames(self):
+        test_date = '2017-08-01'
+        names = create_merge_overnight_flight_data_output_filenames(test_date)
+        self.assertEqual(names[0], 'cpr_fr24_flights_2017-08-01.csv')
+        self.assertEqual(names[1], 'raw_cpr_fr24_positions_2017-08-01.csv')
+        self.assertEqual(names[2], 'cpr_fr24_events_2017-08-01.csv')
+
     def test_create_merge_consecutive_day_input_filenames(self):
         test_date = '2017-08-01'
         names = create_merge_consecutive_day_input_filenames(test_date)

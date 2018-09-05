@@ -6,18 +6,18 @@ Functions to find trajectory airspace intersection data.
 
 import numpy as np
 import pandas as pd
-from .EcefPoint import rad2nm
-from .ecef_functions import calculate_EcefPoints, calculate_LatLongs
-from .AltitudeProfile import AltitudeProfileType
-from .trajectory_functions import calculate_date_times
-from .trajectory_interpolation import interpolate_time_profile_by_distance
+from via_sphere import calculate_latitudes, calculate_longitudes
+from .trajectory_functions import calculate_value_reference, calculate_date_times, \
+    rad2nm
 
 AIRSPACE_INTERSECTION_FIELD_LIST = ['FLIGHT_ID', 'SECTOR_ID', 'IS_EXIT',
                                     'LAT', 'LON', 'ALT', 'TIME', 'DISTANCE']
 """ The output intersection fields. """
 
-INITIAL_POSITION_DISTANCE = 0.01
-""" The maximum distance of an initial position from the start of a trajectory. """
+INITIAL_POSITION_TOLERANCE = 0.01
+""" The tolerance  of an initial position from the start of a trajectory. """
+
+DEFAULT_ACROSS_TRACK_TOLERANCE = 0.5
 
 
 def set_exit_flags(ids):
@@ -32,6 +32,7 @@ def set_exit_flags(ids):
     Returns
     -------
     A numpy boolean array with each value set for the second occurance of an id.
+
     """
     is_exits = np.zeros(len(ids), dtype=np.bool)
     if len(ids):
@@ -47,6 +48,49 @@ def set_exit_flags(ids):
                 entry_indicies.add(volume_id)
 
     return is_exits
+
+
+def calculate_2D_intersection_distances(traj_path, intersection_points,
+                                        volume_ids, start_distance,
+                                        across_track_tolerance=DEFAULT_ACROSS_TRACK_TOLERANCE):
+    """
+    Calculate path distances to intersection_points.
+
+    Parameters
+    ----------
+    traj_path : an EcefPath
+        The EcefPath of the trajectory.
+
+    intersection_points: array of EcefPoints
+        The horizontal intersection points.
+
+    volume_ids: list of strings
+        The ids of the volumes intersected at the positions.
+
+    start_distance: float
+        The distance along the path to the start of the trajectory section,
+        default zero [Nautical Miles].
+
+    across_track_tolerance: float
+        The maximum across track distance to find path distances [Nautical Miles].
+
+    Returns
+    -------
+    A pandas Dataframe with sector ids and distances.
+
+    """
+    start_index = 0
+    if start_distance:
+        distances_nm = rad2nm(traj_path.path_distances())
+        start_index, _ = calculate_value_reference(distances_nm, start_distance)
+
+    tolerance_radians = np.deg2rad(across_track_tolerance / 60.0)
+    distances_2d = rad2nm(traj_path.calculate_path_distances(intersection_points,
+                                                             tolerance_radians,
+                                                             index=start_index))
+    df_2d = pd.DataFrame({'SECTOR_ID': np.array(volume_ids),
+                          'DISTANCE': distances_2d})
+    return df_2d.sort_values(by=['DISTANCE'])
 
 
 def calculate_3D_intersection_distances(alt_p, volume_id, airspace_volume,
@@ -212,10 +256,11 @@ def calculate_3D_intersections(alt_p, volumes, df_2d):
         return pd.DataFrame()
 
 
-def find_3D_airspace_intersections(smooth_traj, lats, lons, volume_ids, volumes):
+def find_3D_airspace_intersections(smooth_traj, traj_path,
+                                   intersection_points, volume_ids, volumes,
+                                   start_distance=0.0, is_cruising=False):
     """
-    Find 3D airspace intersection positions from a smoothed trajectory,
-    2D positions and a dict of airspace volumes.
+    Find 3D airspace intersection positions for a smoothed trajectory.
 
     Parameters
     ----------
@@ -223,8 +268,11 @@ def find_3D_airspace_intersections(smooth_traj, lats, lons, volume_ids, volumes)
         A SmoothedTrajectory containing the flight id, smoothed horizontal path,
         time profile and altitude profile.
 
-    lats, lons: lists of floats
-        The latitudes and longitudes of the 2D intersection positions.
+    traj_path : an EcefPath
+        The EcefPath of the trajectory.
+
+    intersection_points: array of EcefPoints
+        The horizontal intersection points.
 
     volume_ids: list of strings
         The ids of the volumes intersected at the positions.
@@ -232,25 +280,27 @@ def find_3D_airspace_intersections(smooth_traj, lats, lons, volume_ids, volumes)
     volumes: dict of AirspaceVolume
         The AirspaceVolumes intersected by the SmoothedTrajectory.
 
+    start_distance: float
+        The distance along the path to the start of the trajectory section,
+        default zero [Nautical Miles].
+
+    is_cruising : Boolean
+        Whether the intersections were found in a cruising section,
+        default False.
+
     Returns
     -------
     intersect3d_df: a pandas DataFrame
         The 3D trajectory intersection positions.
         Empty if no intersections found.
+
     """
     # Construct the EcefPath corresponding to the HorizontalPath
-    ecef_path = smooth_traj.path.ecef_path()
-    tolerance_radians = np.deg2rad(0.25 / 60.0)
-    ecef_points = calculate_EcefPoints(np.array(lats), np.array(lons))
-    distances_2d = rad2nm(ecef_path.calculate_path_distances(ecef_points,
-                                                             tolerance_radians))
-    df_2d = pd.DataFrame({'SECTOR_ID': np.array(volume_ids),
-                          'DISTANCE': distances_2d})
-    # Sort dataframe by distance
-    df_2d.sort_values(by=['DISTANCE'], inplace=True)
+    df_2d = calculate_2D_intersection_distances(traj_path, intersection_points,
+                                                volume_ids, start_distance)
 
     # No need to calculate 3D intersections for cruising flights
-    df_3d = df_2d if smooth_traj.altp.type() == AltitudeProfileType.CRUISING else \
+    df_3d = df_2d if is_cruising else \
         calculate_3D_intersections(smooth_traj.altp, volumes, df_2d)
     if df_3d.shape[0] == 0:
         return df_3d
@@ -259,7 +309,8 @@ def find_3D_airspace_intersections(smooth_traj, lats, lons, volume_ids, volumes)
     df_3d['IS_EXIT'] = set_exit_flags(df_3d['SECTOR_ID'].values)
 
     # Remove initial positions
-    initial_positions = (df_3d['DISTANCE'] < INITIAL_POSITION_DISTANCE)
+    initial_position_distance = start_distance + INITIAL_POSITION_TOLERANCE
+    initial_positions = (df_3d['DISTANCE'] < initial_position_distance)
     df_3d = df_3d[~initial_positions]
 
     distances_3d = df_3d['DISTANCE'].values
@@ -276,14 +327,15 @@ def find_3D_airspace_intersections(smooth_traj, lats, lons, volume_ids, volumes)
     sector_names = [volumes.get(item).name for item in volume_ids]
 
     # Calculate intersection Lat Longs
-    intersection_points = ecef_path.calculate_positions(distances_3d)
-    lats_3d, lons_3d = calculate_LatLongs(intersection_points)
+    intersection_positions = traj_path.calculate_positions(distances_3d)
+    lats_3d = calculate_latitudes(intersection_positions)
+    lons_3d = calculate_longitudes(intersection_positions)
 
     # Calculate intersection altitudes
     altitudes = smooth_traj.altp.interpolate(distances_3d)
 
     # Calculate the pandas date_times
-    times = interpolate_time_profile_by_distance(smooth_traj.timep, distances_3d)
+    times = smooth_traj.timep.interpolate_by_distance(distances_3d)
     date_times = calculate_date_times(times, smooth_traj.timep.start_time)
 
     # return the data in a pandas DataFrame with fields AIRSPACE_INTERSECTION_FIELD_LIST

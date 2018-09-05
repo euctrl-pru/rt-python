@@ -12,8 +12,8 @@ import errno
 import numpy as np
 import pandas as pd
 from uuid import UUID
-from pru.ecef_functions import calculate_EcefPoints
-from pru.trajectory_functions import compare_trajectory_positions
+from via_sphere import global_Point3d
+from pru.trajectory_matching import compare_trajectory_positions
 from pru.trajectory_fields import read_iso8601_date_string, \
     is_valid_iso8601_date, NEW_ID_FIELDS
 from pru.trajectory_files import create_matching_ids_filename, PREV_DAY
@@ -48,8 +48,8 @@ def verify_matches(flight_matches, positions1, positions2, flight_ids,
                 isinstance(next_pos['TIME'], pd.Series):
 
             next_times = next_pos['TIME'].values
-            next_points = calculate_EcefPoints(next_pos['LAT'].values,
-                                               next_pos['LON'].values)
+            next_points = global_Point3d(next_pos['LAT'].values,
+                                         next_pos['LON'].values)
             next_alts = next_pos['ALT'].values
 
             for prev_id in next_pos['FLIGHT_ID_x'].unique():
@@ -57,8 +57,8 @@ def verify_matches(flight_matches, positions1, positions2, flight_ids,
                 # Ensure that prev_pos has more than one value!
                 if isinstance(prev_pos['TIME'], pd.Series):
                     prev_times = prev_pos['TIME'].values
-                    prev_points = calculate_EcefPoints(prev_pos['LAT'].values,
-                                                       prev_pos['LON'].values)
+                    prev_points = global_Point3d(prev_pos['LAT'].values,
+                                                 prev_pos['LON'].values)
                     prev_alts = prev_pos['ALT'].values
                     valid_match = compare_trajectory_positions(next_times, prev_times,
                                                                next_points, prev_points,

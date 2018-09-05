@@ -5,11 +5,16 @@
 
 import unittest
 import numpy as np
+from os import environ as env
 from numpy.testing import assert_almost_equal, assert_array_almost_equal
 from pru.trajectory_functions import *
 
 
 class TestTrajectoryFunctions(unittest.TestCase):
+
+    def test_rad2nm(self):
+        assert_almost_equal(rad2nm(np.pi), 180.0 * 60.0)
+        assert_almost_equal(rad2nm(np.pi / 180.0), 60.0)
 
     def test_calculate_delta_time(self):
         start_time = np.datetime64('2017-08-01 11:15')
@@ -104,6 +109,24 @@ class TestTrajectoryFunctions(unittest.TestCase):
 
         deltas[5] = -2.0
         self.assertEqual(max_delta(deltas), 2.0)
+
+    def test_find_most_extreme_value(self):
+
+        deltas = np.zeros(10, dtype=float)
+        self.assertEqual(max_delta(deltas), 0.0)
+        max_d, max_d_index = find_most_extreme_value(deltas)
+        self.assertEqual(max_d, 0.0)
+        self.assertEqual(max_d_index, 0)
+
+        deltas[3] = 1.0
+        max_d, max_d_index = find_most_extreme_value(deltas)
+        self.assertEqual(max_d, 1.0)
+        self.assertEqual(max_d_index, 3)
+
+        deltas[5] = -2.0
+        max_d, max_d_index = find_most_extreme_value(deltas)
+        self.assertEqual(max_d, -2.0)
+        self.assertEqual(max_d_index, 5)
 
     def test_calculate_altitude_differences(self):
         """Test the calculate_altitude_differences function."""
@@ -220,6 +243,47 @@ class TestTrajectoryFunctions(unittest.TestCase):
         self.assertEqual(index_7, 119)
         self.assertEqual(ratio_7, 0.0)
 
+    def test_calculate_descending_value_reference(self):
+        """Test the calculate_descending_value_reference function with a series."""
+        values = np.arange(90.0, 0.0, -10.0)
+        max_index = len(values) - 1
+
+        # Test past end of range
+        index_0, ratio_0 = calculate_descending_value_reference(values, 0.0)
+        self.assertEqual(index_0, max_index)
+        self.assertEqual(ratio_0, 0.0)
+
+        # use the first value
+        index_1, ratio_1 = calculate_descending_value_reference(values, 10.0)
+        self.assertEqual(index_1, max_index)
+        self.assertEqual(ratio_1, 0.0)
+
+        # use the last value
+        index_2, ratio_2 = calculate_descending_value_reference(values, 90.0)
+        self.assertEqual(index_2, 0)
+        self.assertEqual(ratio_2, 0.0)
+
+        index_3, ratio_3 = calculate_descending_value_reference(values, 20.0)
+        self.assertEqual(index_3, 7)
+        self.assertEqual(ratio_3, 0.0)
+
+        index_4, ratio_4 = calculate_descending_value_reference(values, 24.0)
+        self.assertEqual(index_4, 6)
+        self.assertEqual(ratio_4, 0.6)
+
+        index_5, ratio_5 = calculate_descending_value_reference(values, 76.0)
+        self.assertEqual(index_5, 1)
+        self.assertEqual(ratio_5, 0.4)
+
+        index_6, ratio_6 = calculate_descending_value_reference(values, 82.0)
+        self.assertEqual(index_6, 0)
+        self.assertEqual(ratio_6, 0.8)
+
+        # Test before start of range
+        index_7, ratio_7 = calculate_descending_value_reference(values, 92.0)
+        self.assertEqual(index_7, 0)
+        self.assertEqual(ratio_7, 0.0)
+
     def test_calculate_value(self):
         """Test the calculate_value function with an altitude series."""
         alts = np.array([20 + i for i in range(10)], dtype=float)
@@ -231,91 +295,17 @@ class TestTrajectoryFunctions(unittest.TestCase):
         self.assertEqual(calculate_value(alts, 9, 0.5), 2900.0)
         self.assertEqual(calculate_value(alts, 10, 0.0), 2900.0)
 
-    def test_compare_trajectory_positions(self):
-        """Test the compare_trajectory_positions function."""
-        datetimes_1 = np.arange(np.datetime64('2017-08-01 11:15'),
-                                np.datetime64('2017-08-01 11:25'),
-                                np.timedelta64(1, 'm'))
+    def test_generate_positions(self):
+        test_data_home = env.get('TEST_DATA_HOME')
+        self.assertTrue(test_data_home)
+        filename = test_data_home + '/cpr_positions_2017-02-05.csv.bz2'
 
-        datetimes_2 = np.arange(np.datetime64('2017-08-01 11:20'),
-                                np.datetime64('2017-08-01 11:30'),
-                                np.timedelta64(1, 'm'))
+        gen = generate_positions(filename)
+        count = 0
+        for positions in gen:
+            count += 1
 
-        datetimes_3 = np.arange(np.datetime64('2017-08-01 11:24'),
-                                np.datetime64('2017-08-01 11:34'),
-                                np.timedelta64(1, 'm'))
-
-        datetimes_4 = np.arange(np.datetime64('2017-08-01 11:25'),
-                                np.datetime64('2017-08-01 11:35'),
-                                np.timedelta64(1, 'm'))
-
-        LATITUDES = np.zeros(len(datetimes_1), dtype=float)
-        LONGITUDES_1 = np.array([-5 + i for i in range(len(datetimes_1))], dtype=float)
-        ecef_points_1 = calculate_EcefPoints(LATITUDES, LONGITUDES_1)
-
-        values1 = np.zeros(len(datetimes_1), dtype=float)
-
-        alts1 = np.full(len(datetimes_1), 21000.0, dtype=float)
-        alts2 = np.full(len(datetimes_1), 22000.0, dtype=float)
-
-        # Identical trajectories
-        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_1,
-                                                     ecef_points_1, ecef_points_1,
-                                                     alts1, alts1))
-
-        # Different altitudes
-        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_1,
-                                                      ecef_points_1, ecef_points_1,
-                                                      alts1, alts2))
-
-        # Different altitudes, within alt_threshold
-        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_1,
-                                                     ecef_points_1, ecef_points_1,
-                                                     alts1, alts2, alt_threshold=1000.0))
-
-        # Second trajectory delayed by 5 mins
-        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_2,
-                                                      ecef_points_1, ecef_points_1,
-                                                      alts1, alts1))
-
-        # Second trajectory delayed by 10 mins
-        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_3,
-                                                      ecef_points_1, ecef_points_1,
-                                                      alts1, alts1))
-
-        LONGITUDES_2 = np.array([i for i in range(len(datetimes_2))], dtype=float)
-        ecef_points_2 = calculate_EcefPoints(LATITUDES, LONGITUDES_2)
-
-        # Second trajectory delayed by 5 mins, by first trajectory
-        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_2,
-                                                     ecef_points_1, ecef_points_2,
-                                                     alts1, alts1))
-
-        LONGITUDES_3 = np.array([4 + i for i in range(len(datetimes_3))], dtype=float)
-        ecef_points_3 = calculate_EcefPoints(LATITUDES, LONGITUDES_3)
-
-        # Second trajectory delayed by 9 mins, by end of first trajectory
-        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_3,
-                                                     ecef_points_1, ecef_points_3,
-                                                     alts1, alts1))
-
-        # Second trajectory delayed by 10 mins, by end of first trajectory
-        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_4,
-                                                      ecef_points_1, ecef_points_3,
-                                                      alts1, alts1))
-
-        # Second trajectory delayed by 10 mins, by end of first trajectory
-        # with a minutes time_threshold.
-        self.assertTrue(compare_trajectory_positions(datetimes_1, datetimes_4,
-                                                     ecef_points_3, ecef_points_1,
-                                                     alts1, alts1, time_threshold=60.0,
-                                                     speed_threshold=750.0))
-
-        # But other way around, ends are not close enough
-        self.assertFalse(compare_trajectory_positions(datetimes_1, datetimes_4,
-                                                      ecef_points_1, ecef_points_3,
-                                                      alts1, alts1, time_threshold=60.0,
-                                                      speed_threshold=750.0))
+        self.assertEqual(count, 20)
 
 
 if __name__ == '__main__':

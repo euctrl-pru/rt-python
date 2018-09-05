@@ -5,10 +5,12 @@
 
 import unittest
 import numpy as np
+import pandas as pd
 from numpy.testing import assert_almost_equal, assert_array_almost_equal
+from via_sphere import global_Point3d, distance_radians
 from pru.trajectory_functions import rad2nm
-from pru.ecef_functions import calculate_EcefPoints
-from pru.EcefPath import *
+from pru.sphere_functions import calculate_position, find_index_and_ratio
+from pru.SpherePath import *
 
 NM = np.deg2rad(1.0 / 60.0)
 
@@ -39,15 +41,15 @@ EXPECTED_PATH_DISTANCES = [0., 59.99086148, 117.83613924, 231.40025743,
 ACROSS_TRACK_TOLERANCE = 0.25 * NM
 
 
-class TestEcefPath(unittest.TestCase):
+class TestSpherePath(unittest.TestCase):
 
-    def test_EcefPath_init(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherefPath_init(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
+        self.assertEqual(len(ecef_points), 12)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
-
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
         self.assertEqual(len(ecef_path.points), 12)
-        assert_array_almost_equal(ecef_path.points, ecef_points)
+        # assert_array_almost_equal(ecef_path.points, ecef_points)
         self.assertEqual(len(ecef_path.turn_initiation_distances), 12)
         assert_array_almost_equal(ecef_path.turn_initiation_distances, TURN_DISTANCES)
         self.assertEqual(len(ecef_path.leg_lengths), 12)
@@ -64,40 +66,40 @@ class TestEcefPath(unittest.TestCase):
         assert_array_almost_equal(ecef_path.turn_initiation_distances_nm(),
                                   rad2nm(TURN_DISTANCES))
 
-    def test_EcefPath_invalid_init(self):
+    def test_SpherePath_invalid_init(self):
         'The route has a duplicate point in the middle, so closer than MIN_LENGTH'
         INVALID_ROUTE_LATS = np.array([1.0, 1.0, 1.0, 1.0, -1.0, 1.0])
         INVALID_ROUTE_LONS = np.array([-3.0, -2.0, -1.0, -1.0, 1.0, 0.0])
-        invalid_points = calculate_EcefPoints(INVALID_ROUTE_LATS, INVALID_ROUTE_LONS)
+        invalid_points = global_Point3d(INVALID_ROUTE_LATS, INVALID_ROUTE_LONS)
         zero_distances = np.zeros(len(invalid_points), dtype=float)
-        self.assertRaises(ValueError, EcefPath, invalid_points, zero_distances)
+        self.assertRaises(ValueError, SpherePath, invalid_points, zero_distances)
 
-    def test_EcefPath_path_distances(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_path_distances(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         path_distances = ecef_path.path_distances()
         self.assertEqual(len(path_distances), 12)
 
         assert_array_almost_equal(rad2nm(path_distances), EXPECTED_PATH_DISTANCES)
 
-    def test_EcefPath_turn_points(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_turn_points(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
         turn_points_0 = ecef_path.turn_points(number_of_points=0)
         self.assertEqual(len(turn_points_0), len(ecef_path) + 8)
 
         # Ensure that start and end points are along inbound and outboud arcs
-        arc_1 = EcefArc(ecef_points[1], ecef_points[2])
+        arc_1 = Arc3d(ecef_points[1], ecef_points[2])
         assert_almost_equal(arc_1.cross_track_distance(turn_points_0[2]), 0.0)
 
-        arc_2 = EcefArc(ecef_points[2], ecef_points[3])
+        arc_2 = Arc3d(ecef_points[2], ecef_points[3])
         assert_almost_equal(arc_2.cross_track_distance(turn_points_0[3]), 0.0)
         assert_almost_equal(arc_2.cross_track_distance(turn_points_0[4]), 0.0)
 
-        arc_last = EcefArc(ecef_points[-2], ecef_points[-1])
+        arc_last = Arc3d(ecef_points[-2], ecef_points[-1])
         assert_almost_equal(arc_last.cross_track_distance(turn_points_0[-2]), 0.0)
 
         turn_points_1 = ecef_path.turn_points(number_of_points=1)
@@ -109,36 +111,36 @@ class TestEcefPath(unittest.TestCase):
         turn_points_5 = ecef_path.turn_points(number_of_points=5)
         self.assertEqual(len(turn_points_5), len(ecef_path) + 48)
 
-    def test_EcefPath_calculate_position(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_calculate_position(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         pos_0 = ecef_path.calculate_position(0, 0.0)
-        assert_array_almost_equal(pos_0, ecef_points[0])
+        assert_almost_equal(distance_radians(pos_0, ecef_points[0]), 0.0)
 
         pos_1 = ecef_path.calculate_position(1, 0.0)
-        assert_array_almost_equal(pos_1, ecef_points[1])
+        assert_almost_equal(distance_radians(pos_1, ecef_points[1]), 0.0)
 
-        arc2 = EcefArc(ecef_points[1], ecef_points[2])
-        arc3 = EcefArc(ecef_points[2], ecef_points[3])
+        arc2 = Arc3d(ecef_points[1], ecef_points[2])
+        arc3 = Arc3d(ecef_points[2], ecef_points[3])
 
-        turn_arc2 = TurnArc(arc2, arc3, TURN_DISTANCES[2])
-        turn2_midpoint = EcefPoint(turn_arc2.position(0.5 * abs(turn_arc2.angle)))
+        turn_arc2 = SphereTurnArc(arc2, arc3, TURN_DISTANCES[2])
+        turn2_midpoint = turn_arc2.position(0.5 * abs(turn_arc2.angle))
 
         pos_2 = ecef_path.calculate_position(2, 0.000001)
-        assert_array_almost_equal(pos_2, turn2_midpoint)
+        assert_almost_equal(distance_radians(pos_2, turn2_midpoint), 0.0)
 
         pos_1_99999 = ecef_path.calculate_position(1, 0.99999)
-        assert_array_almost_equal(pos_1_99999, pos_2)
+        assert_almost_equal(distance_radians(pos_1_99999, pos_2), 0.0, decimal=6)
 
         pos_13 = ecef_path.calculate_position(13, 0.0)
-        assert_array_almost_equal(pos_13, ecef_points[-1])
+        assert_almost_equal(distance_radians(pos_13, ecef_points[-1]), 0.0)
 
-    def test_EcefPath_calculate_path_leg_distance(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_calculate_path_leg_distance(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         # Start point
         distance_0 = ecef_path.calculate_path_leg_distance(ecef_points[0], 0)
@@ -185,10 +187,15 @@ class TestEcefPath(unittest.TestCase):
         distance_last = ecef_path.calculate_path_leg_distance(ecef_points[-1], 10)
         assert_almost_equal(rad2nm(distance_last), EXPECTED_PATH_LENGTHS[11])
 
-    def test_EcefPath_calculate_path_distance(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+        # # A waypoint not on path
+        distance_2_0 = ecef_path.calculate_path_leg_distance(ecef_points[2], 1)
+        assert_almost_equal(rad2nm(distance_2_0), EXPECTED_PATH_LENGTHS[2],
+                            decimal=4)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+    def test_SpherePath_calculate_path_distance(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
+
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         # Start point
         distance_0 = ecef_path.calculate_path_distance(ecef_points[0], 0,
@@ -196,7 +203,7 @@ class TestEcefPath(unittest.TestCase):
         self.assertEqual(distance_0, 0.0)
 
         # from next leg
-        distance_0 = ecef_path.calculate_path_distance(ecef_points[0], 1,
+        distance_0 = ecef_path.calculate_path_distance(ecef_points[0], 2,
                                                        ACROSS_TRACK_TOLERANCE)
         self.assertEqual(distance_0, 0.0)
 
@@ -253,10 +260,16 @@ class TestEcefPath(unittest.TestCase):
         assert_almost_equal(rad2nm(distance_last), EXPECTED_PATH_DISTANCES[11],
                             decimal=6)
 
-    def test_EcefPath_calculate_path_distances(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+        # # A waypoint not on path
+        distance_2_0 = ecef_path.calculate_path_distance(ecef_points[2], 1,
+                                                         ACROSS_TRACK_TOLERANCE)
+        assert_almost_equal(rad2nm(distance_2_0), EXPECTED_PATH_DISTANCES[2],
+                            decimal=4)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+    def test_SpherePath_calculate_path_distances(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
+
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         distances = rad2nm(ecef_path.calculate_path_distances(ecef_points,
                                                               ACROSS_TRACK_TOLERANCE))
@@ -265,10 +278,10 @@ class TestEcefPath(unittest.TestCase):
         assert_almost_equal(distances[11], EXPECTED_PATH_DISTANCES[11], decimal=6)
         assert_array_almost_equal(distances, EXPECTED_PATH_DISTANCES)
 
-    def test_EcefPath_find_index_and_ratio(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_find_index_and_ratio(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         # Start point
         index_0, ratio_0 = ecef_path.find_index_and_ratio(ecef_points[0])
@@ -328,15 +341,15 @@ class TestEcefPath(unittest.TestCase):
         self.assertEqual(index_last, 11)
         self.assertEqual(ratio_last, 0.0)
 
-        # A waypoint not on path
-        index_waypoint, ratio_waypoint = ecef_path.find_index_and_ratio(ecef_points[2])
-        self.assertEqual(index_waypoint, 2)
-        assert_almost_equal(ratio_waypoint, 0.0, decimal=6)
+        # # A waypoint not on path
+        # index_waypoint, ratio_waypoint = ecef_path.find_index_and_ratio(ecef_points[2])
+        # self.assertEqual(index_waypoint, 2)
+        # assert_almost_equal(ratio_waypoint, 0.0, decimal=6)
 
     def test_calculate_path_cross_track_distance(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         assert_almost_equal(ecef_path.calculate_path_cross_track_distance(ecef_points[0], 0), 0.0)
         assert_almost_equal(ecef_path.calculate_path_cross_track_distance(ecef_points[1], 1), 0.0)
@@ -353,16 +366,12 @@ class TestEcefPath(unittest.TestCase):
         xtd_3_3 = ecef_path.calculate_path_cross_track_distance(ecef_points[3], 3)
         assert_almost_equal(rad2nm(xtd_3_3), 8.2824069920496726)
 
-    def test_EcefPath_calculate_cross_track_distances(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_calculate_cross_track_distances(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
-        distances = rad2nm(ecef_path.calculate_path_distances(ecef_points,
-                                                              ACROSS_TRACK_TOLERANCE))
-        self.assertEqual(len(distances), len(ecef_points))
-
-        xtds = ecef_path.calculate_cross_track_distances(ecef_points, distances)
+        xtds = ecef_path.calculate_cross_track_distances(ecef_points, EXPECTED_PATH_DISTANCES)
         self.assertEqual(len(xtds), len(ecef_points))
         assert_almost_equal(xtds[0], 0.0)
         assert_almost_equal(xtds[1], 0.0)
@@ -370,10 +379,10 @@ class TestEcefPath(unittest.TestCase):
         assert_almost_equal(xtds[3], 8.2824069920496726)  # 20NM TID
         assert_almost_equal(xtds[-1], 0.0)
 
-    def test_EcefPath_section_distances_and_types(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_section_distances_and_types(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         path_distances = rad2nm(ecef_path.path_distances())
 
@@ -399,45 +408,45 @@ class TestEcefPath(unittest.TestCase):
         self.assertEqual(distances[-1], path_distances[-1])
         self.assertEqual(types[-1], PointType.Waypoint)
 
-    def test_EcefPath_calculate_positions(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_calculate_positions(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         distances, types = ecef_path.section_distances_and_types()
 
         positions = ecef_path.calculate_positions(distances)
         self.assertEqual(len(positions), len(ecef_path) + 8)
 
-        assert_array_almost_equal(positions[0], ecef_points[0])
-        assert_array_almost_equal(positions[1], ecef_points[1])
-        assert_array_almost_equal(positions[-2], ecef_points[-2])
-        assert_array_almost_equal(positions[-1], ecef_points[-1])
+        assert_almost_equal(distance_radians(positions[0], ecef_points[0]), 0.0)
+        assert_almost_equal(distance_radians(positions[1], ecef_points[1]), 0.0)
+        assert_almost_equal(distance_radians(positions[-2], ecef_points[-2]), 0.0)
+        assert_almost_equal(distance_radians(positions[-1], ecef_points[-1]), 0.0)
 
-    def test_EcefPath_subsection_positions(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_subsection_positions(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         positions0 = ecef_path.subsection_positions(0, 1040.0)
         self.assertEqual(len(positions0), len(ecef_path))
-        assert_array_almost_equal(positions0[0], ecef_points[0])
-        assert_array_almost_equal(positions0[-1], ecef_points[-1])
+        assert_almost_equal(distance_radians(positions0[0], ecef_points[0]), 0.0)
+        assert_almost_equal(distance_radians(positions0[-1], ecef_points[-1]), 0.0)
 
         positions1 = ecef_path.subsection_positions(0, 1000.0)
         self.assertEqual(len(positions1), len(ecef_path))
-        assert_array_almost_equal(positions1[0], ecef_points[0])
-        assert_array_almost_equal(positions1[-2], ecef_points[-2])
+        assert_almost_equal(distance_radians(positions1[0], ecef_points[0]), 0.0)
+        assert_almost_equal(distance_radians(positions1[-2], ecef_points[-2]), 0.0)
 
         positions2 = ecef_path.subsection_positions(100.0, 1040.0)
         self.assertEqual(len(positions2), len(ecef_path) - 1)
-        assert_array_almost_equal(positions2[1], ecef_points[2])
-        assert_array_almost_equal(positions2[-1], ecef_points[-1])
+        assert_almost_equal(distance_radians(positions2[1], ecef_points[2]), 0.0)
+        assert_almost_equal(distance_radians(positions2[-1], ecef_points[-1]), 0.0)
 
-    def test_EcefPath_calculate_ground_track(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_calculate_ground_track(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         track_0 = ecef_path.calculate_ground_track(0, 0.0)
         assert_almost_equal(track_0, np.pi / 2, decimal=3)  # close to due East
@@ -451,10 +460,10 @@ class TestEcefPath(unittest.TestCase):
         track_12_0 = ecef_path.calculate_ground_track(12, 0.0)
         assert_almost_equal(track_12_0, 0.0)  # North
 
-    def test_EcefPath_calculate_ground_tracks(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+    def test_SpherePath_calculate_ground_tracks(self):
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
-        ecef_path = EcefPath(ecef_points, TURN_DISTANCES)
+        ecef_path = SpherePath(ecef_points, TURN_DISTANCES)
 
         distances, types = ecef_path.section_distances_and_types()
 

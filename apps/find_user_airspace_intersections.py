@@ -7,12 +7,9 @@ Find trajectory airspace sector intersections.
 """
 
 import sys
-import bz2
 import os
 import errno
-import pandas as pd
-import json
-from pru.SmoothedTrajectory import loads_SmoothedTrajectories
+from pru.SmoothedTrajectory import generate_SmoothedTrajectories
 from pru.trajectory_user_airspace_intersections import find_trajectory_user_airspace_intersections
 from pru.trajectory_fields import ISO8601_DATETIME_US_FORMAT, has_bz2_extension, \
     CSV_FILE_EXTENSION, JSON_FILE_EXTENSION, BZ2_FILE_EXTENSION, AIRSPACE_INTERSECTION_FIELDS
@@ -26,24 +23,26 @@ DEFAULT_LOGGING_COUNT = 5000
 
 
 def find_user_airspace_intersections(filename, logging_msg_count=DEFAULT_LOGGING_COUNT):
+    """
+    Find intersections between trajectories and user defined airspace volumes.
 
-    is_bz2 = has_bz2_extension(filename)
+    Parameters
+    ----------
+    filename: a string
+        The name of a trajectories file.
 
-    smoothed_trajectories = []
-    # Read the trajectories file into smoothed_trajectories
-    try:
-        with bz2.open(filename, 'rt',  newline="") if (is_bz2) else \
-                open(filename, 'r') as file:
-            json_data = json.loads(file.read())
-            smoothed_trajectories = loads_SmoothedTrajectories(json_data)
+    logging_msg_count: int
+        The number of trajectories between logging count messages.
+        default DEFAULT_LOGGING_COUNT.
 
-        log.info('find_user_airspace_intersections read file: %s', filename)
+    Returns
+    -------
+    An errno error_code if an error occured, zero otherwise.
 
-    except EnvironmentError:
-        log.error('could not read file: %s', filename)
-        return errno.ENOENT
-
+    """
+    log.info(f'trajectories file: {filename}')
     trajectories_filename = os.path.basename(filename)
+    is_bz2 = has_bz2_extension(filename)
     if is_bz2:  # remove the .bz2 from the end of the filename
         trajectories_filename = trajectories_filename[:-len(BZ2_FILE_EXTENSION)]
 
@@ -52,35 +51,39 @@ def find_user_airspace_intersections(filename, logging_msg_count=DEFAULT_LOGGING
     output_filename = output_filename.replace(JSON_FILE_EXTENSION,
                                               CSV_FILE_EXTENSION)
     try:
-        file = open(output_filename, 'w')
-        file.write(AIRSPACE_INTERSECTION_FIELDS)
+        with open(output_filename, 'w') as file:
+            file.write(AIRSPACE_INTERSECTION_FIELDS)
 
-        flights_count = 0
-        for smooth_traj in smoothed_trajectories:
-            try:
-                flight_id = smooth_traj.flight_id
-                sect_ints = find_trajectory_user_airspace_intersections(smooth_traj)
-                if sect_ints.empty:
-                    log.warn('no intersections found with flight: %s', flight_id)
-                else:
-                    sect_ints.to_csv(file, index=False,
-                                     header=False, mode='a',
-                                     date_format=ISO8601_DATETIME_US_FORMAT)
+            flights_count = 0
+            zeros_count = 0
+            smoothed_trajectories = generate_SmoothedTrajectories(filename)
+            for smooth_traj in smoothed_trajectories:
+                try:
+                    flight_id = smooth_traj.flight_id
+                    sect_ints = find_trajectory_user_airspace_intersections(smooth_traj)
+                    if not sect_ints.empty:
+                        sect_ints.to_csv(file, index=False,
+                                         header=False, mode='a',
+                                         date_format=ISO8601_DATETIME_US_FORMAT)
+                    else:
+                        zeros_count += 1
+                        # log.warn(f'no intersections found with flight: {flight_id}')
 
-                flights_count += 1
-                if not (flights_count % logging_msg_count):
-                    log.info('%i trajectories processed', flights_count)
+                    flights_count += 1
+                    if not (flights_count % logging_msg_count):
+                        log.info(f'{flights_count} trajectories processed')
 
-            except ValueError:
-                log.exception('find_trajectory_user_airspace_intersections id: %s', flight_id)
+                except ValueError:
+                    log.exception(f'find_trajectory_user_airspace_intersections id: {flight_id}')
 
-        file.close()
+                except StopIteration:
+                    pass
 
-        log.info('find_user_airspace_intersections finished for %i trajectories!',
-                 flights_count)
+            log.info(f'find_user_airspace_intersections finished for {flights_count} trajectories')
+            log.info(f'{zeros_count} trajectories had no intersections')
 
     except EnvironmentError:
-        log.error('could not write file: %s', output_filename)
+        log.error(f'could not write file: {output_filename}')
         return errno.EACCES
 
     return 0
@@ -94,7 +97,7 @@ if __name__ == '__main__':
 
     logging_msg_count = DEFAULT_LOGGING_COUNT
     if len(sys.argv) >= 3:
-        logging_msg_count = int(sys.argv[4])
+        logging_msg_count = int(sys.argv[2])
 
     error_code = find_user_airspace_intersections(sys.argv[1], logging_msg_count)
     if error_code:

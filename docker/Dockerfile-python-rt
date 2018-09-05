@@ -1,10 +1,10 @@
-# Copyright (c) 2017-2018 Via Technology Ltd. All Rights Reserved.
+# Copyright (c) 2018 Via Technology Ltd. All Rights Reserved.
 # Consult your license regarding permissions and restrictions.
 
-# Describes a pru jupyter docker image
-# Based on the base notebook image.
+# Describes a pru python docker image
+# Based on the base python image.
 
-FROM nb-base:0.5.0
+FROM python-base:0.1.0
 
 LABEL maintainer="pete.marshall@via-technology.aero"
 
@@ -17,7 +17,7 @@ ARG PRU_HOME=/pru
 # What kind of deployment is it: int, ta, test etc
 ARG DEPLOYMENT_TYPE=int
 
-# The name of the PEM file.  See the secrets configuration 
+# The name of the PEM file.  See the secrets configuration
 ARG PEM_FILE=pem-file.json
 
 #
@@ -53,15 +53,12 @@ ENV BACKUPS $DATA_HOME/backups
 # We need to tell the app where to read the PEM file from.
 ENV PEM_FILE $PRU_HOME/certs/${PEM_FILE:-pem-file.json}
 
-USER root
-
 RUN mkdir $PRU_HOME \
  && mkdir $PROJECT_HOME \
  && mkdir $PROJECT_HOME/pru \
  && mkdir $PROJECT_HOME/apps \
  && mkdir $PROJECT_HOME/scripts \
  && mkdir $PROJECT_HOME/tools \
- && mkdir $PROJECT_HOME/notebooks \
  && mkdir $PROJECT_HOME/config
 
 RUN chown -R 1000:100 $PRU_HOME
@@ -70,8 +67,8 @@ RUN chown -R 1000:100 $PRU_HOME
 COPY --chown=1000:100 pru $PROJECT_HOME/pru
 COPY --chown=1000:100 apps $PROJECT_HOME/apps
 COPY --chown=1000:100 scripts $PROJECT_HOME/scripts
+COPY --chown=1000:100 scripts $PROJECT_HOME/scripts/processes
 COPY --chown=1000:100 tools $PROJECT_HOME/tools
-COPY --chown=1000:100 notebooks $PROJECT_HOME/notebooks
 COPY --chown=1000:100 config $PROJECT_HOME/config
 
 # NOTE COPY --chown=1000:100 does not work, even though it's documented!!
@@ -79,8 +76,5 @@ RUN chown -R 1000:100 $PRU_HOME \
  && chown -R 1000:100 $PROJECT_HOME \
  && chmod -R ugo+x $PROJECT_HOME/apps \
  && chmod -R ugo+x $PROJECT_HOME/tools \
- && chmod -R ugo+x $PROJECT_HOME/scripts/processes \
- && chmod 777 $PROJECT_HOME/config/notebook-config.sh
-
-# Revert to USER jovyan, see: https://github.com/jupyter/docker-stacks/issues/188
-USER $NB_UID
+ && chmod -R ugo+x $PROJECT_HOME/config \
+ && chmod -R ugo+x $PROJECT_HOME/scripts

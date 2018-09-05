@@ -7,9 +7,9 @@ import unittest
 import numpy as np
 from numpy.testing import assert_almost_equal, assert_array_almost_equal
 from os import environ as env
-from pru.TurnArc import TurnArc
-from pru.ecef_functions import calculate_EcefPoints
-from pru.horizontal_path_functions import *
+from via_sphere import global_Point3d, Arc3d, distance_radians
+from pru.SphereTurnArc import SphereTurnArc
+from pru.spherical_path_functions import *
 
 TEST_DATA_HOME = 'TEST_DATA_HOME'
 
@@ -23,10 +23,10 @@ ACROSS_TRACK_TOLERANCE = np.deg2rad(0.25 / 60.0)
 NM = np.deg2rad(1.0 / 60.0)
 
 
-class TestHorizontalPathFunctions(unittest.TestCase):
+class TestSphericalPathFunctions(unittest.TestCase):
 
     def test_find_furthest_distance(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
         # Test North pole to South pole
         distance1, index1 = find_furthest_distance(ecef_points)
@@ -36,22 +36,22 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         # A line of Lat Longs around the Equator
         LATITUDES = np.zeros(10, dtype=float)
         LONGITUDES = np.array(range(-5, 5), dtype=float)
-        ecef_points_0 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_0 = global_Point3d(LATITUDES, LONGITUDES)
 
         # All points within arc
-        arc = EcefArc(ecef_points_0[0], ecef_points_0[-1])
+        arc = Arc3d(ecef_points_0[0], ecef_points_0[-1])
         index_0 = find_extreme_point_along_track_index(arc, ecef_points_0, 1.0 * NM)
         self.assertEqual(index_0, 0)
 
         # Point 2 before start of arc
         LONGITUDES[2] = -6
-        ecef_points_1 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_1 = global_Point3d(LATITUDES, LONGITUDES)
         index_1 = find_extreme_point_along_track_index(arc, ecef_points_1, 1.0 * NM)
         self.assertEqual(index_1, 2)
 
         # Point 8 past end of arc
         LONGITUDES[8] = 8
-        ecef_points_2 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_2 = global_Point3d(LATITUDES, LONGITUDES)
         index_2 = find_extreme_point_along_track_index(arc, ecef_points_2, 1.0 * NM)
         self.assertEqual(index_2, 8)
 
@@ -59,7 +59,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         # A line of Lat Longs around the Equator
         LATITUDES = np.zeros(10, dtype=float)
         LONGITUDES = np.array(range(-5, 5), dtype=float)
-        ecef_points_0 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_0 = global_Point3d(LATITUDES, LONGITUDES)
 
         # same point
         max_index = 0
@@ -92,7 +92,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         # move some points alongside the arc
         LATITUDES[1] = 0.5
         LATITUDES[4] = 1
-        ecef_points_1 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_1 = global_Point3d(LATITUDES, LONGITUDES)
 
         max_index = 2
         result_2 = find_extreme_point_index(ecef_points_1, 0, max_index,
@@ -107,7 +107,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         self.assertEqual(max_index_1, 4)
 
         LATITUDES[4] = -1
-        ecef_points_2 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_2 = global_Point3d(LATITUDES, LONGITUDES)
         max_index_2 = find_extreme_point_index(ecef_points_2, 2, max_index,
                                                threshold=ACROSS_TRACK_TOLERANCE,
                                                xtd_ratio=0.1, calc_along_track=False)
@@ -119,7 +119,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         self.assertEqual(max_index_3, 4)
 
         SHORT_LONGITUDES = np.array([-5 + i / 600.0 for i in range(10)], dtype=float)
-        ecef_points_4 = calculate_EcefPoints(LATITUDES, SHORT_LONGITUDES)
+        ecef_points_4 = global_Point3d(LATITUDES, SHORT_LONGITUDES)
 
         max_index_4 = find_extreme_point_index(ecef_points_4, 2, max_index,
                                                threshold=ACROSS_TRACK_TOLERANCE,
@@ -130,7 +130,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         # A line of Lat Longs by the Equator
         LATITUDES = np.array([0.0, -0.001, 0.01, -0.001, 0.0])
         LONGITUDES = np.array([0.0, 0.0005, 0.001, 0.0014, 0.0015])
-        ecef_points_0 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_0 = global_Point3d(LATITUDES, LONGITUDES)
 
         # mid point
         max_index = len(ecef_points_0) - 1
@@ -157,7 +157,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         # A line of Lat Longs around the Equator
         LATITUDES = np.zeros(10, dtype=float)
         LONGITUDES = np.array(range(-5, 5), dtype=float)
-        ecef_points_0 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_0 = global_Point3d(LATITUDES, LONGITUDES)
 
         # same point
         max_index = len(ecef_points_0) - 1
@@ -168,7 +168,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
 
         # route "doubles back" on itself
         LONGITUDES[-1] = LONGITUDES[-3]
-        ecef_points_1 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_1 = global_Point3d(LATITUDES, LONGITUDES)
         result_1 = find_extreme_point_index(ecef_points_1, 0, max_index,
                                             threshold=ACROSS_TRACK_TOLERANCE,
                                             xtd_ratio=0.1, calc_along_track=True)
@@ -178,7 +178,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         # A line of Lat Longs around the Equator
         LATITUDES = np.zeros(10, dtype=float)
         LONGITUDES = np.array([-5 + i for i in range(10)], dtype=float)
-        ecef_points_0 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_0 = global_Point3d(LATITUDES, LONGITUDES)
 
         indicies_0 = find_extreme_point_indicies(ecef_points_0,
                                                  threshold=ACROSS_TRACK_TOLERANCE,
@@ -189,7 +189,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
 
         LATITUDES[4] = 1
         LATITUDES[8] = -1
-        ecef_points_1 = calculate_EcefPoints(LATITUDES, LONGITUDES)
+        ecef_points_1 = global_Point3d(LATITUDES, LONGITUDES)
 
         indicies_1 = find_extreme_point_indicies(ecef_points_1,
                                                  threshold=ACROSS_TRACK_TOLERANCE,
@@ -208,50 +208,50 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         LONS_0 = np.array([0.0, 1.0, 2.0, 3.0])
 
         # Test points along arc
-        ecef_points_0 = calculate_EcefPoints(LATS_0, LONS_0)
-        ecef_arc_0 = EcefArc(ecef_points_0[0], ecef_points_0[-1])
+        ecef_points_0 = global_Point3d(LATS_0, LONS_0)
+        ecef_arc_0 = Arc3d(ecef_points_0[0], ecef_points_0[-1])
         new_arc_0 = fit_arc_to_points(ecef_points_0, ecef_arc_0)
-        assert_array_almost_equal(new_arc_0.a, ecef_arc_0.a)
-        assert_array_almost_equal(new_arc_0.b, ecef_arc_0.b)
+        assert_almost_equal(distance_radians(new_arc_0.a(), ecef_arc_0.a()), 0.0)
+        assert_almost_equal(distance_radians(new_arc_0.b(), ecef_arc_0.b()), 0.0)
 
         # Test slope away from start of arc
-        ecef_points_1 = calculate_EcefPoints(LONS_0, LONS_0)
-        ecef_arc_1 = EcefArc(ecef_points_1[0], ecef_points_1[-1])
+        ecef_points_1 = global_Point3d(LONS_0, LONS_0)
+        ecef_arc_1 = Arc3d(ecef_points_1[0], ecef_points_1[-1])
 
         new_arc_1 = fit_arc_to_points(ecef_points_1, ecef_arc_0)
-        assert_array_almost_equal(new_arc_1.a, ecef_arc_0.a)
-        assert_array_almost_equal(new_arc_1.pole, ecef_arc_1.pole)
+        assert_almost_equal(distance_radians(new_arc_1.a(), ecef_arc_0.a()), 0.0)
+        assert_almost_equal(distance_radians(new_arc_1.pole(), ecef_arc_1.pole()), 0.0)
 
         # Test slope towards end of arc
         LATS_2 = np.array([3.0, 2.0, 1.0, 0.0])
-        ecef_points_2 = calculate_EcefPoints(LATS_2, LONS_0)
-        ecef_arc_2 = EcefArc(ecef_points_2[0], ecef_points_2[-1])
+        ecef_points_2 = global_Point3d(LATS_2, LONS_0)
+        ecef_arc_2 = Arc3d(ecef_points_2[0], ecef_points_2[-1])
 
         new_arc_2 = fit_arc_to_points(ecef_points_2, ecef_arc_0)
-        assert_array_almost_equal(new_arc_2.pole, ecef_arc_2.pole)
-        assert_array_almost_equal(new_arc_2.b, ecef_arc_0.b)
+        assert_almost_equal(distance_radians(new_arc_2.pole(), ecef_arc_2.pole()), 0.0)
+        assert_almost_equal(distance_radians(new_arc_2.b(), ecef_arc_0.b()), 0.0)
 
     def test_calculate_intersection(self):
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
 
         # intersection point between arcs on different Great Circles
-        prev_arc = EcefArc(ecef_points[0], ecef_points[1])
-        arc = EcefArc(ecef_points[1], ecef_points[2])
+        prev_arc = Arc3d(ecef_points[0], ecef_points[1])
+        arc = Arc3d(ecef_points[1], ecef_points[2])
         point_1 = calculate_intersection(prev_arc, arc)
-        assert_array_almost_equal(point_1, ecef_points[1])
+        assert_almost_equal(distance_radians(point_1, ecef_points[1]), 0.0)
 
         # intersection point between arcs on same Great Circles
-        next_point = arc.position(2 * arc.length)
-        next_arc = EcefArc(ecef_points[2], next_point)
+        next_point = arc.position(2 * arc.length())
+        next_arc = Arc3d(ecef_points[2], next_point)
         point_2 = calculate_intersection(arc, next_arc)
-        assert_array_almost_equal(point_2, ecef_points[2])
+        assert_almost_equal(distance_radians(point_2, ecef_points[2]), 0.0)
 
         # intersection point between arcs on different Great Circles,
         # opposite direction turn
-        prev_arc = EcefArc(ecef_points[5], ecef_points[6])
-        arc = EcefArc(ecef_points[6], ecef_points[7])
+        prev_arc = Arc3d(ecef_points[5], ecef_points[6])
+        arc = Arc3d(ecef_points[6], ecef_points[7])
         point_3 = calculate_intersection(prev_arc, arc)
-        assert_array_almost_equal(point_3, ecef_points[6])
+        assert_almost_equal(distance_radians(point_3, ecef_points[6]), 0.0)
 
     def test_calculate_max_turn_initiation_distance(self):
         # two long legs
@@ -273,12 +273,12 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         # A 90 degree turn at the Equator
         LATS = np.array([0.0, 0.0, 1.0])
         LONS = np.array([1.0, 0.0, 0.0])
-        ecef_points = calculate_EcefPoints(LATS, LONS)
+        ecef_points = global_Point3d(LATS, LONS)
 
-        prev_arc = EcefArc(ecef_points[0], ecef_points[1])
-        arc = EcefArc(ecef_points[1], ecef_points[2])
+        prev_arc = Arc3d(ecef_points[0], ecef_points[1])
+        arc = Arc3d(ecef_points[1], ecef_points[2])
         TEN_NM = TWENTY_NM / 2
-        turn_0 = TurnArc(prev_arc, arc, TEN_NM)
+        turn_0 = SphereTurnArc(prev_arc, arc, TEN_NM)
         turn_angle_0 = turn_0.angle
 
         distance_start = calculate_turn_initiation_distance(prev_arc, arc, turn_0.start,
@@ -305,7 +305,7 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         assert_almost_equal(distance_3, TEN_NM)
 
         # Test with a point further than TWENTY_NM from the intersection
-        turn_30 = TurnArc(prev_arc, arc, TWENTY_NM + TEN_NM)
+        turn_30 = SphereTurnArc(prev_arc, arc, TWENTY_NM + TEN_NM)
         distance_4 = calculate_turn_initiation_distance(prev_arc, arc, turn_30.start,
                                                         TWENTY_NM, ACROSS_TRACK_TOLERANCE)
         self.assertEqual(distance_4, TWENTY_NM)
@@ -319,12 +319,12 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         # A shallow turn at the Equator
         LATS = np.array([0.0, 0.0, 0.2])
         LONS = np.array([-1.0, 0.0, 1.0])
-        ecef_points = calculate_EcefPoints(LATS, LONS)
+        ecef_points = global_Point3d(LATS, LONS)
 
-        prev_arc = EcefArc(ecef_points[0], ecef_points[1])
-        arc = EcefArc(ecef_points[1], ecef_points[2])
+        prev_arc = Arc3d(ecef_points[0], ecef_points[1])
+        arc = Arc3d(ecef_points[1], ecef_points[2])
         TEN_NM = TWENTY_NM / 2
-        turn_0 = TurnArc(prev_arc, arc, TEN_NM)
+        turn_0 = SphereTurnArc(prev_arc, arc, TEN_NM)
         turn_angle_0 = turn_0.angle
 
         distance_start = calculate_turn_initiation_distance(prev_arc, arc, turn_0.start,
@@ -354,11 +354,11 @@ class TestHorizontalPathFunctions(unittest.TestCase):
         test_data_home = env.get('TEST_DATA_HOME')
         self.assertTrue(test_data_home)
 
-        ecef_points = calculate_EcefPoints(ROUTE_LATS, ROUTE_LONS)
+        ecef_points = global_Point3d(ROUTE_LATS, ROUTE_LONS)
         ecef_path = derive_horizontal_path(ecef_points, ACROSS_TRACK_TOLERANCE)
         self.assertEqual(len(ecef_path), 12)
-        assert_array_almost_equal(ecef_path.points[0], ecef_points[0])
-        assert_array_almost_equal(ecef_path.points[-1], ecef_points[-1])
+        assert_almost_equal(distance_radians(ecef_path.points[0], ecef_points[0]), 0.0)
+        assert_almost_equal(distance_radians(ecef_path.points[-1], ecef_points[-1]), 0.0)
 
 
 if __name__ == '__main__':

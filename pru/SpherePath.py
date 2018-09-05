@@ -7,23 +7,24 @@ coordinates.
 """
 
 import numpy as np
-from .EcefPoint import EcefPoint, MIN_LENGTH
-from .EcefArc import EcefArc
-from .TurnArc import TurnArc, calculate_arc_length, MIN_TURN_ANGLE, MAX_TURN_ANGLE
-from .ecef_functions import calculate_LatLongs, calculate_leg_lengths, \
-    calculate_EcefArcs, find_index_and_ratio, calculate_turn_angles
+from via_sphere import MIN_LENGTH, Arc3d, calculate_Arc3ds, \
+    calculate_leg_lengths, calculate_turn_angles, \
+    calculate_latitudes, calculate_longitudes, to_array
+from .SphereTurnArc import SphereTurnArc, calculate_arc_length, \
+    MIN_TURN_ANGLE, MAX_TURN_ANGLE
+from .sphere_functions import find_index_and_ratio
 from .trajectory_functions import calculate_value_reference, rad2nm
 
 
 class PointType:
     """The types of EcefPath Points."""
+
     Waypoint, TurnStart, TurnFinish = range(3)
 
 
 def calculate_arc_half_lengths(turn_angles, turn_initiation_distances):
     """
-    Calculate the half lengths of arcs defined by turn_angles and
-    turn_initiation_distances.
+    Calculate the half lengths of arcs.
 
     Note: it only calculates arc lengths for non zero turn_initiation_distances.
 
@@ -38,6 +39,7 @@ def calculate_arc_half_lengths(turn_angles, turn_initiation_distances):
     Returns
     -------
     lengths: a numpy array of half lengths of the arcs in [radians]
+
     """
     half_lengths = np.zeros(len(turn_angles), dtype=float)
     for i in range(len(turn_angles)):
@@ -49,8 +51,10 @@ def calculate_arc_half_lengths(turn_angles, turn_initiation_distances):
 
 def calculate_paths_lengths(leg_lengths, turn_initiation_distances, arc_half_lengths):
     """
-    Calculate the lengths of paths between waypoints, i.e. the leg_lengths
-    shortend by the (turn_initiation_distance - arc_half_length) at each waypoint.
+    Calculate the lengths of paths between waypoints.
+
+    I.e. the leg_lengths shortend by (turn_initiation_distance - arc_half_length)
+    at each waypoint.
 
     Parameters
     ----------
@@ -66,6 +70,7 @@ def calculate_paths_lengths(leg_lengths, turn_initiation_distances, arc_half_len
     Returns
     -------
     lengths: a numpy array of path lengths in [radians]
+
     """
     lengths = np.zeros(len(leg_lengths), dtype=float)
     prev_delta = 0.0
@@ -83,12 +88,14 @@ def calculate_paths_lengths(leg_lengths, turn_initiation_distances, arc_half_len
     return lengths
 
 
-class EcefPath:
+class SpherePath:
     """
-    A class for an ECEF Path.
-    An ECEF Path is an ordered collection of ECEF points and their relative
+    A class for an SpherePath Path.
+
+    A SpherePath Path is an ordered collection of Points3D and their relative
     geometry: leg_lengths, turn_angles, path_lengths, etc.
     """
+
     __slots__ = ('__points', '__turn_initiation_distances', '__leg_lengths',
                  '__turn_angles', '__turn_half_lengths', '__path_lengths')
 
@@ -96,7 +103,8 @@ class EcefPath:
     # @pre(len(points) == len(turn_initiation_distances))
     def __init__(self, points, turn_initiation_distances):
         """
-        Create a new EcefPath from points and turn_initiation_distances.
+        Create a new SpherePath from points and turn_initiation_distances.
+
         There must be at least two points and the number of turn_initiation_distances
         must be equal to the number of points.
 
@@ -108,11 +116,12 @@ class EcefPath:
 
         Parameters
         ----------
-        points: EcefPoints points.
-            An ordered array of EcefPoints.
+        points: Point3ds points.
+            An ordered array of Point3ds.
 
         turn_initiation_distances: float array
             An ordered array of turn initiation distances [radians].
+
         """
         self.__points = points
 
@@ -125,7 +134,7 @@ class EcefPath:
         if has_a_short_leg:
             raise ValueError('Some path points are closer than MIN_LENGTH.')
 
-        leg_arcs = calculate_EcefArcs(points)
+        leg_arcs = calculate_Arc3ds(points)
 
         # Calculate turn angles.
         turn_angles = calculate_turn_angles(leg_arcs)
@@ -145,61 +154,62 @@ class EcefPath:
 
     @property
     def points(self):
-        'Accessor for the points.'
+        """Accessor for the points."""
         return self.__points
 
     @property
     def turn_initiation_distances(self):
-        'Accessor for the turn_initiation_distances in [radians].'
+        """Accessor for the turn_initiation_distances in [radians]."""
         return self.__turn_initiation_distances
 
     @property
     def leg_lengths(self):
-        'Accessor for the leg_lengths in [radians].'
+        """Accessor for the leg_lengths in [radians]."""
         return self.__leg_lengths
 
     @property
     def turn_angles(self):
-        'Accessor for the turn_angles in [radians].'
+        """Accessor for the turn_angles in [radians]."""
         return self.__turn_angles
 
     @property
     def turn_half_lengths(self):
-        'Accessor for the turn_half_lengths in [radians].'
+        """Accessor for the turn_half_lengths in [radians]."""
         return self.__turn_half_lengths
 
     @property
     def path_lengths(self):
-        'Accessor for the path_lengths in [radians].'
+        """Accessor for the path_lengths in [radians]."""
         return self.__path_lengths
 
     def __len__(self):
-        'The number of points.'
+        """Get the number of points."""
         return len(self.points)
 
     def point_lat_longs(self):
-        'Get the points as arrays of Latitudes and Longitudes in [degrees].'
-        return calculate_LatLongs(self.points)
+        """Get the points as arrays of Latitudes and Longitudes in [degrees]."""
+        return calculate_latitudes(self.points), calculate_longitudes(self.points)
 
     def turn_initiation_distances_nm(self):
-        'Get the turn_initiation_distances in [Nautical Miles].'
+        """Get the turn_initiation_distances in [Nautical Miles]."""
         return rad2nm(self.turn_initiation_distances)
 
     def path_distances(self):
         """
         Calculate distances along the path to the arc abeam points of the points.
+
         I.e. the distances along the path from the start point.
 
         Returns
         -------
         An ordered array of path distances [radians].
+
         """
         return np.cumsum(self.path_lengths)
 
     def turn_points(self, *, number_of_points=3):
         """
-        Calculate an ordered array of points containing the path flown
-        along route legs and around turns.
+        Calculate the path flown along route legs and around turns.
 
         Parameters
         ----------
@@ -209,8 +219,9 @@ class EcefPath:
 
         Returns
         ----------
-        An ordered array of points [EcefPoints] containing the path flown
+        An ordered array of points [Point3ds] containing the path flown
         along route legs and around turns.
+
         """
         # Add the path start point
         points = [self.points[0]]
@@ -218,24 +229,24 @@ class EcefPath:
         for i in range(1, len(self) - 1):
             turn_distance = self.turn_initiation_distances[i]
             if turn_distance:  # if there is a turn
-                # Calculate the TurnArc for the turn
-                inbound_leg = EcefArc(self.points[i - 1], self.points[i])
-                outbound_leg = EcefArc(self.points[i], self.points[i + 1])
-                turn_arc = TurnArc(inbound_leg, outbound_leg, turn_distance)
+                # Calculate the SphereTurnArc for the turn
+                inbound_leg = Arc3d(self.points[i - 1], self.points[i])
+                outbound_leg = Arc3d(self.points[i], self.points[i + 1])
+                turn_arc = SphereTurnArc(inbound_leg, outbound_leg, turn_distance)
                 if turn_arc:
                     # Add the turn start point
-                    points.append(EcefPoint(turn_arc.start))
+                    points.append(turn_arc.start)
 
                     if number_of_points:  # any indermediate points?
                         # calculate the angle between each point
                         delta_angle = turn_arc.angle / (1.0 + number_of_points)
                         angle = delta_angle
                         for j in range(number_of_points):  # create turn points
-                            points.append(EcefPoint(turn_arc.position(angle)))
+                            points.append(turn_arc.position(angle))
                             angle += delta_angle
 
                     # Add the turn finish point
-                    points.append(EcefPoint(turn_arc.finish))
+                    points.append(turn_arc.finish)
                 else:  # invalid turn_arc
                     points.append(self.points[i])
             else:  # no turn
@@ -244,7 +255,7 @@ class EcefPath:
         # Add the path finish point
         points.append(self.points[-1])
 
-        return points
+        return to_array(points)
 
     def calculate_position(self, index, ratio):
         """
@@ -264,12 +275,13 @@ class EcefPath:
 
         Returns
         -------
-        The EcefPoint at index and ratio along the path.
+        The Point3d at index and ratio along the path.
+
         """
         # ensure index is within the points
         if index < len(self) - 1:
             # calculate the route leg arc
-            arc = EcefArc(self.points[index], self.points[index + 1])
+            arc = Arc3d(self.points[index], self.points[index + 1])
 
             #  calculate the distance from the point at index
             path_length = self.path_lengths[index + 1]
@@ -290,24 +302,25 @@ class EcefPath:
                 turn_initiation_distance = self.turn_initiation_distances[index]
                 if inside_finish_turn:
                     turn_initiation_distance = self.turn_initiation_distances[index + 1]
-                    outbound_leg = EcefArc(self.points[index + 1], self.points[index + 2])
+                    outbound_leg = Arc3d(self.points[index + 1], self.points[index + 2])
                     distance -= next_turn_distance
                     ratio = 0.5 * distance / self.turn_half_lengths[index + 1]
                 else:  # inside_start_turn
-                    inbound_leg = EcefArc(self.points[index - 1], self.points[index])
+                    inbound_leg = Arc3d(self.points[index - 1], self.points[index])
                     distance += self.turn_half_lengths[index]
                     ratio = 0.5 * distance / self.turn_half_lengths[index]
 
-                # Calculate the position in the TurnArc
-                turn_arc = TurnArc(inbound_leg, outbound_leg, turn_initiation_distance)
-                return EcefPoint(turn_arc.position(ratio * turn_arc.angle))
+                # Calculate the position in the SphereTurnArc
+                turn_arc = SphereTurnArc(inbound_leg, outbound_leg,
+                                         turn_initiation_distance)
+                return turn_arc.position(ratio * turn_arc.angle)
             else:  # point is along straight section
                 # if the leg starts with a turn
                 if self.turn_initiation_distances[index]:
                     distance += self.turn_initiation_distances[index] - \
                         self.turn_half_lengths[index]
                 ratio = (distance / self.leg_lengths[index + 1])
-                return EcefPoint(arc.position(ratio * arc.length))
+                return arc.position(ratio * arc.length())
 
         else:  # return last point
             return self.points[-1]
@@ -328,7 +341,7 @@ class EcefPath:
 
         Parameters
         ----------
-        point: EcefPoint
+        point: Point3d
             The point to measure.
 
         index: integer
@@ -337,11 +350,12 @@ class EcefPath:
         Returns
         -------
         The distance [radians] of the point along the path leg at index.
+
         """
         distance = 0.0
 
         # calculate the route leg arc and the point's distance along it
-        arc = EcefArc(self.points[index], self.points[index + 1])
+        arc = Arc3d(self.points[index], self.points[index + 1])
         distance = arc.along_track_distance(point)
 
         # if there is a start turn and the point is within it
@@ -350,20 +364,20 @@ class EcefPath:
         inside_prev_turn = (prev_turn_initiation_distance > 0.0) and \
             (distance < prev_turn_initiation_distance)
         if inside_prev_turn:
-            inbound_leg = EcefArc(self.points[index - 1], self.points[index])
-            turn_arc = TurnArc(inbound_leg, arc, prev_turn_initiation_distance)
+            inbound_leg = Arc3d(self.points[index - 1], self.points[index])
+            turn_arc = SphereTurnArc(inbound_leg, arc, prev_turn_initiation_distance)
             distance = turn_arc.along_track_distance(point) \
                 - self.turn_half_lengths[index]
         else:
             # calculate the distance to the turn by the next point
             next_turn_initiation_distance = self.turn_initiation_distances[index + 1]  \
                 if (index < (len(self) - 2)) else 0.0
-            next_turn_distance = arc.length - next_turn_initiation_distance
+            next_turn_distance = arc.length() - next_turn_initiation_distance
             inside_next_turn = (next_turn_initiation_distance > 0.0) and \
                 (distance > next_turn_distance)
             if inside_next_turn:
-                outbound_leg = EcefArc(self.points[index + 1], self.points[index + 2])
-                turn_arc = TurnArc(arc, outbound_leg, next_turn_initiation_distance)
+                outbound_leg = Arc3d(self.points[index + 1], self.points[index + 2])
+                turn_arc = SphereTurnArc(arc, outbound_leg, next_turn_initiation_distance)
                 distance = turn_arc.along_track_distance(point)
                 distance += self.path_lengths[index + 1] \
                     - self.turn_half_lengths[index + 1]
@@ -384,7 +398,7 @@ class EcefPath:
 
         Parameters
         ----------
-        point: EcefPoint
+        point: Point3d
             The point to measure.
 
         index: integer
@@ -396,21 +410,22 @@ class EcefPath:
         Returns
         -------
         The distance [radians] of the point along the path at index.
+
         """
         # calculate the closest distance between the point and the leg
-        arc = EcefArc(self.points[index], self.points[index + 1])
+        arc = Arc3d(self.points[index], self.points[index + 1])
         closest_distance = arc.closest_distance(point)
 
         prev_distance = closest_distance + 1.0
         if index > 0:  # not first leg
             # calculate the closest distance between the point and the previous leg
-            arc = EcefArc(self.points[index - 1], self.points[index])
+            arc = Arc3d(self.points[index - 1], self.points[index])
             prev_distance = arc.closest_distance(point)
 
         next_distance = closest_distance + 1.0
         if index < (len(self) - 2):  # not last leg
             # calculate the closest distance between the point and the next leg
-            arc = EcefArc(self.points[index + 1], self.points[index + 2])
+            arc = Arc3d(self.points[index + 1], self.points[index + 2])
             next_distance = arc.closest_distance(point)
 
         min_distance = min(closest_distance, min(prev_distance, next_distance))
@@ -433,14 +448,14 @@ class EcefPath:
     def calculate_path_distances(self, ecef_points, across_track_tolerance,
                                  *, index=0):
         """
-        The distances along the path to the ecef_points.
+        Calculate the distances along the path to the ecef_points.
 
         The index is the index of the closest path leg to the first point.
 
         Parameters
         ----------
-        ecef_points: EcefPoints points.
-            An ordered array of EcefPoints.
+        ecef_points: Point3ds points.
+            An ordered array of Point3ds.
 
         across_track_tolerance: float
             The maximum across track distance [radians]
@@ -451,6 +466,7 @@ class EcefPath:
         Returns
         -------
         The distances along the path to each of the ecef_points in [radians].
+
         """
         distances = np.zeros(len(ecef_points), dtype=float)
 
@@ -458,7 +474,6 @@ class EcefPath:
         for i, point in enumerate(ecef_points):
             distances[i] = self.calculate_path_distance(point, index,
                                                         across_track_tolerance)
-
             past_current_leg = (distances[i] > path_distance)
             is_last_leg = (index >= len(self) - 2)
             if past_current_leg and not is_last_leg:
@@ -470,11 +485,11 @@ class EcefPath:
 
     def find_index_and_ratio(self, point):
         """
-        The index and ratio of the closest point along the path to point.
+        Find the index and ratio of the closest point along the path to point.
 
         Parameters
         ----------
-        point: EcefPoint
+        point: Point3d
             The point to find.
 
         Returns
@@ -483,6 +498,7 @@ class EcefPath:
 
         If the point was not found: the index of the last point and zero
         respectively.
+
         """
         # find the index and ratio of the point along the route
         index, ratio = find_index_and_ratio(self.points, point)
@@ -516,7 +532,7 @@ class EcefPath:
 
         Parameters
         ----------
-        point: EcefPoint
+        point: Point3d
             The point to measure.
 
         index: integer
@@ -525,9 +541,10 @@ class EcefPath:
         Returns
         -------
         The cross track distance [radians] of the point from the path leg at index.
+
         """
         # calculate the route leg arc and the point's distance from it
-        arc = EcefArc(self.points[index], self.points[index + 1])
+        arc = Arc3d(self.points[index], self.points[index + 1])
         xtd = arc.cross_track_distance(point)
 
         prev_turn_initiation_distance = self.turn_initiation_distances[index] \
@@ -543,17 +560,17 @@ class EcefPath:
             inside_prev_turn = (prev_turn_initiation_distance > 0.0) and \
                 (distance < prev_turn_initiation_distance)
             if inside_prev_turn:
-                inbound_leg = EcefArc(self.points[index - 1], self.points[index])
-                turn_arc = TurnArc(inbound_leg, arc, prev_turn_initiation_distance)
+                inbound_leg = Arc3d(self.points[index - 1], self.points[index])
+                turn_arc = SphereTurnArc(inbound_leg, arc, prev_turn_initiation_distance)
                 xtd = turn_arc.cross_track_distance(point)
             else:
                 # calculate the distance to the turn by the next point
-                next_turn_distance = arc.length - next_turn_initiation_distance
+                next_turn_distance = arc.length() - next_turn_initiation_distance
                 inside_next_turn = (next_turn_initiation_distance > 0.0) and \
                     (distance > next_turn_distance)
                 if inside_next_turn:
-                    outbound_leg = EcefArc(self.points[index + 1], self.points[index + 2])
-                    turn_arc = TurnArc(arc, outbound_leg, next_turn_initiation_distance)
+                    outbound_leg = Arc3d(self.points[index + 1], self.points[index + 2])
+                    turn_arc = SphereTurnArc(arc, outbound_leg, next_turn_initiation_distance)
                     xtd = turn_arc.cross_track_distance(point)
 
         return xtd
@@ -564,8 +581,8 @@ class EcefPath:
 
         Parameters
         ----------
-        points: EcefPoints points array.
-            An array of EcefPoints in path distance order.
+        points: Point3ds points array.
+            An array of Point3ds in path distance order.
 
         distances: float array
             An array of order path distances of the points along the EcefPath
@@ -574,6 +591,7 @@ class EcefPath:
         Returns
         -------
         The cross track distances of the points from the path in [Nautical Miles].
+
         """
         xtds = np.zeros(len(points), dtype=float)
 
@@ -593,12 +611,12 @@ class EcefPath:
 
     def section_distances_and_types(self):
         """
-        Calculate the distances to waypoints and starts/finishes of turns along
-        the path.
+        Calculate the distances to waypoints and starts/finishes of path turns.
 
         Returns
         -------
         The along path distances of waypoints and turns in [Nautical Miles].
+
         """
         distances = [0.0]
         point_types = [PointType.Waypoint]
@@ -638,8 +656,9 @@ class EcefPath:
 
         Returns
         -------
-        points: EcefPoints points array.
-            An array of EcefPoints at distances along the path.
+        points: Point3ds points array.
+            An array of Point3ds at distances along the path.
+
         """
         positions = []
 
@@ -661,7 +680,7 @@ class EcefPath:
             position = self.calculate_position(path_index, ratio)
             positions.append(position)
 
-        return positions
+        return to_array(positions)
 
     def subsection_positions(self, start_distance, finish_distance):
         """
@@ -677,8 +696,8 @@ class EcefPath:
 
         Returns
         -------
-        points: EcefPoints points array.
-            The array of EcefPoints between start_distance and finish_distance
+        points: Point3ds points array.
+            The array of Point3ds between start_distance and finish_distance
             including points at start_distance and finish_distance.
 
         """
@@ -688,19 +707,19 @@ class EcefPath:
         finish_index, finish_ratio = calculate_value_reference(distances_nm,
                                                                finish_distance)
 
-        arc = EcefArc(self.points[start_index], self.points[start_index + 1])
-        start_position = EcefPoint(arc.position(start_ratio * arc.length))
+        arc = Arc3d(self.points[start_index], self.points[start_index + 1])
+        start_position = arc.position(start_ratio * arc.length())
         positions = [start_position]
 
         for i in range(start_index + 1, finish_index + 1):
             positions.append(self.points[i])
 
         if finish_ratio > 0.0:
-            arc = EcefArc(self.points[finish_index], self.points[finish_index + 1])
-            finish_position = EcefPoint(arc.position(finish_ratio * arc.length))
+            arc = Arc3d(self.points[finish_index], self.points[finish_index + 1])
+            finish_position = arc.position(finish_ratio * arc.length())
             positions.append(finish_position)
 
-        return positions
+        return to_array(positions)
 
     def calculate_ground_track(self, index, ratio):
         """
@@ -721,11 +740,12 @@ class EcefPath:
         Returns
         -------
         The ground track at index and ratio along the path in [radians].
+
         """
         # ensure index is within the points
         if index < len(self) - 1:
             # calculate the route leg arc
-            arc = EcefArc(self.points[index], self.points[index + 1])
+            arc = Arc3d(self.points[index], self.points[index + 1])
 
             #  calculate the distance from the point at index
             path_length = self.path_lengths[index + 1]
@@ -746,16 +766,16 @@ class EcefPath:
                 turn_initiation_distance = self.turn_initiation_distances[index]
                 if inside_finish_turn:
                     turn_initiation_distance = self.turn_initiation_distances[index + 1]
-                    outbound_leg = EcefArc(self.points[index + 1], self.points[index + 2])
+                    outbound_leg = Arc3d(self.points[index + 1], self.points[index + 2])
                     distance -= next_turn_distance
                     ratio = 0.5 * distance / self.turn_half_lengths[index + 1]
                 else:  # inside_start_turn
-                    inbound_leg = EcefArc(self.points[index - 1], self.points[index])
+                    inbound_leg = Arc3d(self.points[index - 1], self.points[index])
                     distance += self.turn_half_lengths[index]
                     ratio = 0.5 * distance / self.turn_half_lengths[index]
 
-                turn_arc = TurnArc(inbound_leg, outbound_leg, turn_initiation_distance)
-                return inbound_leg.calculate_ground_track(turn_arc.start) \
+                turn_arc = SphereTurnArc(inbound_leg, outbound_leg, turn_initiation_distance)
+                return inbound_leg.calculate_azimuth(turn_arc.start) \
                     + ratio * turn_arc.angle
             else:  # point is along straight section
                 # if the leg starts with a turn
@@ -763,11 +783,11 @@ class EcefPath:
                     distance += self.turn_initiation_distances[index] - \
                         self.turn_half_lengths[index]
                 ratio = (distance / self.leg_lengths[index + 1])
-                point = arc.position(ratio * arc.length)
-                return arc.calculate_ground_track(point)
+                point = arc.position(ratio * arc.length())
+                return arc.calculate_azimuth(point)
         else:
-            arc = EcefArc(self.points[-2], self.points[-1])
-            return arc.calculate_ground_track(arc.b)
+            arc = Arc3d(self.points[-2], self.points[-1])
+            return arc.calculate_azimuth(self.points[-1])
 
     def calculate_ground_tracks(self, distances):
         """
@@ -783,6 +803,7 @@ class EcefPath:
         -------
         ground_tracks: float array.
             An array of ground_tracks at distances along the path in [radians].
+
         """
         ground_tracks = np.zeros(len(distances), dtype=float)
 

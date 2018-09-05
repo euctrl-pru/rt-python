@@ -3,26 +3,66 @@
 """
 Functions to find trajectory airport intersection data.
 """
-
 import numpy as np
 import pandas as pd
-from .EcefPoint import rad2nm
-from .ecef_functions import calculate_EcefPoints
-from .SmoothedTrajectory import SmoothedTrajectory
-from .trajectory_functions import calculate_date_times
-from .trajectory_interpolation import interpolate_time_profile_by_distance
-from .gis_database_interface import find_airport_cylinder_intersection
+from via_sphere import calculate_distances, latitude, longitude, \
+    distance_radians, EPSILON, Arc3d
+from .trajectory_functions import rad2nm, calculate_value_reference, \
+    calculate_descending_value_reference, calculate_date_times
 
 AIRPORT_INTERSECTION_FIELD_LIST = ['FLIGHT_ID', 'AIRPORT_ID', 'RADIUS', 'IS_DESTINATION',
                                    'LAT', 'LON', 'ALT', 'TIME', 'DISTANCE']
 
-DEFAULT_RADIUS = 110.0
+DEFAULT_RADIUS = 40.0
 'The default airport cylinder radius in [Nautical Miles].'
 
+DEFAULT_DISTANCE_TOLERANCE = 0.25
+""" The default distance tolerance in Nautical Miles, 0.25 NM. """
 
-def find_airport_intersection(smooth_traj, airport, radius, is_destination):
+
+def find_cylinder_intersection_index(points, centre, radius, is_destination):
     """
-    Find an airport cylinder intersection position from a smoothed trajectory
+    Find the index and ratio in points at radius from centre.
+
+    Parameters
+    ----------
+    points: numpy array of Point3ds
+        An array of points representing a horizontal aircraft trajectory.
+
+    centre: Point3d
+        The centre of the cylinder.
+
+    radius: float
+        The radius of the cylinder [radians].
+
+    is_destination: Boolean
+        True if the cylinder is for a destination airport, False if it's
+        a departure airport.
+
+    Returns
+    -------
+    The index and ratio along the array of Point3ds of the cylinder
+    intersection point. The index is -1 if there was no intersection.
+
+    """
+    # Calculate distances of the points from the centre of the cylinder
+    distances = calculate_distances(points, centre)
+
+    # if the points intersect the cylinder
+    min_distance = distances.min()
+    max_distance = distances.max()
+    if min_distance < radius < max_distance:
+        return calculate_descending_value_reference(distances, radius) \
+            if is_destination else calculate_value_reference(distances, radius)
+
+    return -1, 0.0
+
+
+def find_airport_intersection(smooth_traj, traj_path, airport,
+                              ref_point, radius, is_destination,
+                              distance_tolerance=DEFAULT_DISTANCE_TOLERANCE):
+    """
+    Find an airport cylinder intersection position from a smoothed trajectory.
 
     Parameters
     ----------
@@ -30,74 +70,97 @@ def find_airport_intersection(smooth_traj, airport, radius, is_destination):
         A SmoothedTrajectory containing the flight id, smoothed horizontal path,
         time profile and altitude profile.
 
-    airport_id: string
-        The minimum altitude of the positions [feet].
+    traj_path : an EcefPath
+        The EcefPath of the SmoothedTrajectory.
+
+    airport: string
+        The ICAO id of the airport.
+
+    ref_point: Point3D
+        The reference point of the airport.
 
     radius: float
-        The maximum altitude of the positions [Nautical Miles].
+        The radius of the cylinder around the airport [Nautical Miles].
+
+    is_destination: Boolean
+        True if the cylinder is for a destination airport, False if it's
+        a departure airport.
+
+    distance_tolerance: float
+        The tolerance for path and cylinder distances [Nautical Miles].
 
     Returns
     -------
-    An array containing the airport cylinder intersection position data.
-    Or None, if not found.
+    A pandas DataFrame containing the airport cylinder intersection position data.
+    Or an empty DataFrame, if not found.
 
     """
-    lats = []
-    lons = []
-    lats, lons = find_airport_cylinder_intersection(smooth_traj.flight_id,
-                                                    smooth_traj.path.lats,
-                                                    smooth_traj.path.lons,
-                                                    airport, radius,
+    radius_radians = np.deg2rad(radius / 60.0)
+    tolerance_radians = np.deg2rad(distance_tolerance / 60.0)
+    path_points = traj_path.points
+    index, ratio = find_cylinder_intersection_index(path_points,
+                                                    ref_point, radius_radians,
                                                     is_destination)
+    if index < 0:  # no intersections found
+        return pd.DataFrame()
+
+    int_point = path_points[index]
+
+    # Calculate the precise intersection point
+    distance = radius_radians
+    if (ratio > 0.0) and (index < len(path_points) - 1):
+        # Calculate the along and across track distances to the centre
+        arc = Arc3d(int_point, path_points[index + 1])
+        atd = arc.along_track_distance(ref_point)
+        xtd = np.abs(arc.cross_track_distance(ref_point))
+
+        d = radius_radians if xtd < radius_radians else 0.0
+        if d and (xtd > EPSILON):
+            # project the radius on to the arc using spherical Pythagoras
+            d = np.arccos(np.cos(d) / np.cos(xtd))
+
+        if is_destination:
+            d = atd + d if (atd + d) <= arc.length() else atd - d
+        else:
+            d = atd - d if (atd - d) >= 0.0 else atd + d
+        int_point = arc.position(d)
+        distance = distance_radians(int_point, ref_point)
+
+    # Don't return result if distance is invalid
+    distance_nm = rad2nm(distance)
+    if np.abs(distance_nm - radius) > distance_tolerance:
+        flight_id = smooth_traj.flight_id
+        raise ValueError(f'Distance not within tolerance, {flight_id}, {distance_nm}')
 
     # Create an array of flight_ids
-    flight_id = np.array(len(lats), dtype='object')
-    flight_id.fill(str(smooth_traj.flight_id))
+    flight_id = np.array([smooth_traj.flight_id])
 
     # Create an array of airport_ids
-    airport_id = np.array(len(lats), dtype='object')
-    airport_id.fill(airport)
+    airport_id = np.array([airport])
 
-    radii = np.zeros(len(lats), dtype=np.float)
-    radii.fill(radius)
+    # radii = np.array([distance_nm])
+    radii = np.array([radius])
 
-    is_destination = np.ones(len(lats), dtype=np.bool) if is_destination else \
-        np.zeros(len(lats), dtype=np.bool)
+    lats = np.array([latitude(int_point)])
+    lons = np.array([longitude(int_point)])
 
-    alts = np.zeros(len(lats), dtype=np.float)
-    date_times = np.empty(len(lats), dtype='datetime64[us]')
-    date_times.fill(smooth_traj.timep.start_time)
+    is_destination = np.ones(1, dtype=np.bool) if is_destination else \
+        np.zeros(1, dtype=np.bool)
 
-    distances = np.zeros(len(lats), dtype=np.float)
+    distances = rad2nm(traj_path.calculate_path_distances([int_point],
+                                                          tolerance_radians))
+    alts = smooth_traj.altp.interpolate(distances)
 
-    intersect_df = pd.DataFrame({'FLIGHT_ID': flight_id,
-                                 'AIRPORT_ID': airport_id,
-                                 'RADIUS': radii,
-                                 'IS_DESTINATION': is_destination,
-                                 'LAT': np.array(lats),
-                                 'LON': np.array(lons),
-                                 'ALT': alts,
-                                 'TIME': date_times,
-                                 'DISTANCE': distances},
-                                columns=AIRPORT_INTERSECTION_FIELD_LIST)
+    times = smooth_traj.timep.interpolate_by_distance(distances)
+    date_times = calculate_date_times(times, smooth_traj.timep.start_time)
 
-    if (len(lats)):
-
-        # Construct the EcefPath corresponding to the HorizontalPath
-        ecef_path = smooth_traj.path.ecef_path()
-        tolerance_radians = np.deg2rad(0.25 / 60.0)
-        ecef_points = calculate_EcefPoints(intersect_df['LAT'].values,
-                                           intersect_df['LON'].values)
-        path_distances = rad2nm(ecef_path.calculate_path_distances(ecef_points,
-                                                                   tolerance_radians))
-        # Sort dataframe by path_distances
-        intersect_df['DISTANCE'] = path_distances
-        intersect_df.sort_values(by=['DISTANCE'], inplace=True)
-
-        sorted_distances = intersect_df['DISTANCE'].values
-        intersect_df['ALT'] = smooth_traj.altp.interpolate(sorted_distances)
-        times = interpolate_time_profile_by_distance(smooth_traj.timep, sorted_distances)
-        intersect_df['TIME'] = calculate_date_times(times, smooth_traj.timep.start_time)
-
-    # return the data in a pandas DataFrame with trajectory_fields.AIRSPACE_INTERSECTION_FIELD_LIST
-    return intersect_df
+    return pd.DataFrame({'FLIGHT_ID': flight_id,
+                         'AIRPORT_ID': airport_id,
+                         'RADIUS': radii,
+                         'IS_DESTINATION': is_destination,
+                         'LAT': lats,
+                         'LON': lons,
+                         'ALT': alts,
+                         'TIME': date_times,
+                         'DISTANCE': distances},
+                        columns=AIRPORT_INTERSECTION_FIELD_LIST)

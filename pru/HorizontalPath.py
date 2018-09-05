@@ -7,40 +7,42 @@ The horizontal path of a smoothed trajectory.
 
 import numpy as np
 import json
-from .ecef_functions import calculate_EcefPoints
-from .EcefPath import EcefPath
+from via_sphere import global_Point3d
+from .SpherePath import SpherePath
 
 
 class HorizontalPath:
     """
     A class for a trajectory horizontal path.
+
     A horizontal path is the path followed by an aircraft including turns.
     """
+
     __slots__ = ('__lats', '__lons', '__tids')
 
     def __init__(self, lats, lons, tids):
-        'HorizontalPath constructor'
+        """Constructor."""
         self.__lats = lats
         self.__lons = lons
         self.__tids = tids
 
     @property
     def lats(self):
-        'Accessor for the latitudes.'
+        """Accessor for the latitudes."""
         return self.__lats
 
     @property
     def lons(self):
-        'Accessor for the longitudes.'
+        """Accessor for the longitudes."""
         return self.__lons
 
     @property
     def tids(self):
-        'Accessor for the turn initiation distances.'
+        """Accessor for the turn initiation distances."""
         return self.__tids
 
     def dumps(self):
-        'Dump the HorizontalPath to a JSON string'
+        """Dump the HorizontalPath to a JSON string."""
         string_list = ['{\n',
                        '    "lats" : ', json.dumps(self.lats.tolist()), ',\n',
                        '    "lons" : ', json.dumps(self.lons.tolist()), ',\n',
@@ -50,14 +52,14 @@ class HorizontalPath:
 
     @classmethod
     def loads(cls, json_data):
-        'Load an HorizontalPath from a JSON object'
+        """Load an HorizontalPath from a JSON object."""
         lats = np.array(json_data["lats"])
         lons = np.array(json_data["lons"])
         tids = np.array(json_data["tids"])
         return cls(lats, lons, tids)
 
     def ecef_path(self):
-        'Construct the EcefPath corresponding to the HorizontalPath'
-        ecef_points = calculate_EcefPoints(self.lats, self.lons)
+        """Construct the SpherePath corresponding to the HorizontalPath."""
+        ecef_points = global_Point3d(self.lats, self.lons)
         tids_rads = np.deg2rad(self.tids / 60.0)
-        return EcefPath(ecef_points, tids_rads)
+        return SpherePath(ecef_points, tids_rads)

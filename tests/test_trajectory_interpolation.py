@@ -5,12 +5,10 @@
 
 import unittest
 import numpy as np
-from numpy.testing import assert_almost_equal, assert_array_almost_equal
+from numpy.testing import assert_almost_equal
 from os import environ as env
-from pru.EcefPoint import rad2nm
 from pru.EcefPath import PointType
-from pru.TimeProfile import TimeProfile
-from pru.AltitudeProfile import AltitudeProfile
+from pru.trajectory_functions import rad2nm
 from pru.trajectory_analysis import analyse_trajectory, MOVING_AVERAGE_SPEED
 from pru.trajectory_interpolation import *
 

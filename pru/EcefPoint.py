@@ -235,36 +235,3 @@ class EcefPoint:
         else:
             msg = '{cls.__name__} indicies must be integers'
             raise TypeError(msg.format(cls=cls))
-
-
-def rad2nm(d):
-    """
-    Convert a distance in radians to Nautical Miles.
-    Note: it assumes that the Earth is a sphere.
-
-    Parameters
-    ----------
-    d: float.
-    The distance in [radians].
-
-    Returns
-    -------
-    The distance in [Nautical Miles].
-    """
-    return 60.0 * np.rad2deg(d)
-
-
-def distance_nm(a, b):
-    """
-    The Great Circle distance between two EcefPoints: a and b.
-
-    Parameters
-    ----------
-    a, b: EcefPoints.
-
-    Returns
-    -------
-    distance: float
-        The Great Circle distance between a and b in [Nautical Miles].
-    """
-    return rad2nm(distance_radians(a, b))

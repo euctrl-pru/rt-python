@@ -47,7 +47,7 @@ from pru.trajectory_analysis import DEFAULT_ACROSS_TRACK_TOLERANCE, MOVING_AVERA
     DEFAULT_MOVING_MEDIAN_SAMPLES, DEFAULT_MOVING_AVERAGE_SAMPLES, \
     DEFAULT_SPEED_MAX_DURATION
 from pru.trajectory_interpolation import DEFAULT_STRAIGHT_INTERVAL, DEFAULT_TURN_INTERVAL
-from pru.trajectory_airport_intersections import DEFAULT_RADIUS
+from pru.trajectory_airport_intersections import DEFAULT_RADIUS, DEFAULT_DISTANCE_TOLERANCE
 
 from apps.convert_cpr_data import convert_cpr_data
 from apps.convert_fr24_data import convert_fr24_data
@@ -67,7 +67,8 @@ from apps.analyse_position_data import analyse_position_data
 from apps.interpolate_trajectories import interpolate_trajectories
 
 from apps.find_sector_intersections import find_sector_intersections
-from apps.find_airport_intersections import find_airport_intersections
+from apps.find_airport_intersections import find_airport_intersections, \
+    DEFAULT_MOVEMENTS_AIRPORTS_FILENAME
 from apps.find_user_airspace_intersections import find_user_airspace_intersections
 
 from pru.logger import logger
@@ -474,7 +475,7 @@ def analyse_positions_on_date(date, source=CPR_FR24, *,
     gc.collect()
 
     filenames = create_analyse_position_data_filenames(source, date,
-                                                       distance_tolerance, method)
+                                                       distance_tolerance, time_method)
 
     # Put the traj metrics file first so that it can be deleted
     metrics_path = '/'.join([PRODUCTS, TRAJ_METRICS, source])
@@ -689,7 +690,8 @@ def find_trajectory_sector_intersections(trajectory_filename, source=CPR_FR24,
 
 def find_trajectory_airport_intersections(trajectory_filename, source=CPR_FR24,
                                           radius=DEFAULT_RADIUS,
-                                          logging_msg_count=DEFAULT_LOGGING_COUNT):
+                                          airports_filename=DEFAULT_MOVEMENTS_AIRPORTS_FILENAME,
+                                          distance_tolerance=DEFAULT_DISTANCE_TOLERANCE):
     """
     """
     if not path_exists(trajectory_filename):
@@ -708,10 +710,12 @@ def find_trajectory_airport_intersections(trajectory_filename, source=CPR_FR24,
             log.error('Flights file not found in %s bucket', source_path)
             return False
 
+    get_airports(airports_filename, '.')
+
     log.info("find_sector_intersections for: %s and %s",
              flights_filename, trajectory_filename)
     if find_airport_intersections(flights_filename, trajectory_filename,
-                                  radius, logging_msg_count):
+                                  radius, airports_filename, distance_tolerance):
         return False
 
     output_filename = trajectory_filename.replace(TRAJECTORIES, AIRPORT_INTERSECTIONS)

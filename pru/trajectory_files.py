@@ -61,6 +61,7 @@ NEW = 'new'
 REF = 'ref'
 IDS = 'ids'
 IATA = 'iata'
+OVERNIGHT = 'overnight'
 
 ORIGINAL_CPR_FILE_PREFIX = '1.'
 ORIGINAL_CPR_FILE_SUFFIX = '1001tacop104ARCHIVED_OPLOG_ALL_CPR.gz'
@@ -258,6 +259,51 @@ def create_match_consecutive_day_input_filenames(datestring):
             create_flights_filename(CPR_FR24, datestring),
             create_positions_filename(CPR_FR24, prev_datestring),
             create_positions_filename(CPR_FR24, datestring)]
+
+
+def create_match_overnight_flights_input_filenames(datestring):
+    """Create the list of filenames for match_overnight_flights.py."""
+    prev_datestring = iso8601_previous_day(datestring)
+    return [create_flights_filename(CPR_FR24, prev_datestring),
+            create_flights_filename(CPR_FR24, datestring)]
+
+
+def create_extract_overnight_data_input_filenames(datestring):
+    """Create the list of filenames for extract_overnight_data.py."""
+    return [create_matching_ids_filename(PREV_DAY, datestring),
+            create_flights_filename(CPR_FR24, datestring),
+            create_positions_filename(CPR_FR24, datestring),
+            create_events_filename(CPR_FR24, datestring)]
+
+
+def create_extract_overnight_data_output_filenames(datestring):
+    """Create the list of filenames for extract_overnight_data.py."""
+    NEW_CPR_FR24 = '_'.join([NEW, CPR_FR24])
+    OVERNIGHT_CPR_FR24 = '_'.join([OVERNIGHT, CPR_FR24])
+    prev_datestring = iso8601_previous_day(datestring)
+    return [create_flights_filename(NEW_CPR_FR24, datestring),
+            create_positions_filename(NEW_CPR_FR24, datestring),
+            create_events_filename(NEW_CPR_FR24, datestring),
+            create_positions_filename(OVERNIGHT_CPR_FR24, prev_datestring),
+            create_events_filename(OVERNIGHT_CPR_FR24, prev_datestring)]
+
+
+def create_merge_overnight_flight_data_input_filenames(datestring):
+    """Create the list of filenames for merge_overnight_flight_data.py."""
+    NEW_CPR_FR24 = '_'.join([NEW, CPR_FR24])
+    OVERNIGHT_CPR_FR24 = '_'.join([OVERNIGHT, CPR_FR24])
+    return [create_flights_filename(NEW_CPR_FR24, datestring),
+            create_positions_filename(NEW_CPR_FR24, datestring),
+            create_positions_filename(OVERNIGHT_CPR_FR24, datestring),
+            create_events_filename(NEW_CPR_FR24, datestring),
+            create_events_filename(OVERNIGHT_CPR_FR24, datestring)]
+
+
+def create_merge_overnight_flight_data_output_filenames(datestring):
+    """Create the list of filenames for merge_overnight_flight_data.py."""
+    return [create_flights_filename(CPR_FR24, datestring),
+            create_raw_positions_filename(CPR_FR24, datestring),
+            create_events_filename(CPR_FR24, datestring)]
 
 
 def create_merge_consecutive_day_input_filenames(datestring):

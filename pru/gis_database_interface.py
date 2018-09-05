@@ -34,10 +34,10 @@ class NotFoundException(Exception):
         self.message = message
 
 
-def find_2D_airspace_intersections(flight_id, latitudes, longitudes,
-                                   min_altitude, max_altitude):
+def find_horizontal_sector_intersections(flight_id, latitudes, longitudes,
+                                         min_altitude, max_altitude):
     """
-    Find 2D airspace sector intersections.
+    Find horizontal airspace sector intersections.
 
     Note: the latitudes and longitudes arrays must be the same length, 2 positions or longer.
 
@@ -73,7 +73,7 @@ def find_2D_airspace_intersections(flight_id, latitudes, longitudes,
     E.g.
     [latitudes[0], latitudes[-1]], [longitudes[0], longitudes[-1]], ['id1', 'id2']
     """
-    log.debug("Finding intersections for flight %s, with min altitude %s and max altitude %s",
+    log.debug("Finding sector intersections for flight %s, with min altitude %s and max altitude %s",
               flight_id, min_altitude, max_altitude)
 
     # Get the connection string
@@ -97,7 +97,6 @@ def find_2D_airspace_intersections(flight_id, latitudes, longitudes,
     # Organise the outputs
     intersection_data_structure = create_intersection_data_structure(intersections, flight_id)
 
-    log.debug("Completed finding intersections for flight id %s", flight_id)
     return intersection_data_structure
 
 
@@ -216,10 +215,10 @@ def find_airport_cylinder_intersection(flight_id, latitudes, longitudes,
         return [], []
 
 
-def find_2D_user_airspace_intersections(flight_id, latitudes, longitudes,
-                                        min_altitude, max_altitude):
+def find_horizontal_user_airspace_intersections(flight_id, latitudes, longitudes,
+                                                min_altitude, max_altitude):
     """
-    Find 2D user airspace intersections.
+    Find horizontal user airspace intersections.
 
     Note: the latitudes and longitudes arrays must be the same length, 2 positions or longer.
 
@@ -255,7 +254,7 @@ def find_2D_user_airspace_intersections(flight_id, latitudes, longitudes,
     E.g.
     [latitudes[0], latitudes[-1]], [longitudes[0], longitudes[-1]], ['id1', 'id2']
     """
-    log.debug("Finding intersections for flight %s, with min altitude %s and max altitude %s",
+    log.debug("Finding user airspace intersections for flight %s, with min altitude %s and max altitude %s",
               flight_id, min_altitude, max_altitude)
 
     # Get the connection string
@@ -278,7 +277,6 @@ def find_2D_user_airspace_intersections(flight_id, latitudes, longitudes,
     # Organise the outputs
     intersection_data_structure = create_intersection_data_structure(intersections, flight_id)
 
-    log.debug("Completed finding intersections with user defined sectors for flight id %s", flight_id)
     return intersection_data_structure
 
 

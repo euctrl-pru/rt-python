@@ -11,8 +11,8 @@ import os
 import errno
 import pandas as pd
 import uuid
-from pru.ecef_functions import calculate_EcefPoints
-from pru.trajectory_functions import compare_trajectory_positions
+from via_sphere import global_Point3d
+from pru.trajectory_matching import compare_trajectory_positions
 from pru.trajectory_fields import read_iso8601_date_string, \
     is_valid_iso8601_date, NEW_ID_FIELDS
 from pru.trajectory_files import create_match_cpr_adsb_output_filenames
@@ -49,7 +49,7 @@ def verify_flight_matches(flight_matches, cpr_positions, adsb_positions,
         # Ensure that cpr_pos has more than one value!
         if isinstance(cpr_pos['TIME'], pd.Series):
             cpr_times = cpr_pos['TIME'].values
-            cpr_points = cpr_pos['ECEF_POINTS'].values
+            cpr_points = global_Point3d(cpr_pos['LAT'], cpr_pos['LON'])
             cpr_alts = cpr_pos['ALT'].values
 
             for adsb_id in cpr_pos['FLIGHT_ID_y'].unique():
@@ -72,7 +72,7 @@ def verify_flight_matches(flight_matches, cpr_positions, adsb_positions,
                 # Ensure that adsb_pos has more than one value!
                 if isinstance(adsb_pos['TIME'], pd.Series):
                     adsb_times = adsb_pos['TIME'].values
-                    adsb_points = adsb_pos['ECEF_POINTS'].values
+                    adsb_points = global_Point3d(adsb_pos['LAT'], adsb_pos['LON'])
                     adsb_alts = adsb_pos['ALT'].values
 
                     # compare positions to validate the match
@@ -216,15 +216,6 @@ def match_cpr_adsb_trajectories(filenames, distance_threshold=DEFAULT_MATCHING_D
         return errno.ENOENT
 
     log.info('adsb points read ok')
-
-    # Calculate points in ECEF coords and add them to the DataFrames
-    cpr_points_df['ECEF_POINTS'] = calculate_EcefPoints(cpr_points_df['LAT'].values,
-                                                        cpr_points_df['LON'].values)
-    log.info('calculated cpr ecef points')
-
-    adsb_points_df['ECEF_POINTS'] = calculate_EcefPoints(adsb_points_df['LAT'].values,
-                                                         adsb_points_df['LON'].values)
-    log.info('calculated adsb ecef points')
 
     # Dicts to hold the flight ids
     cpr_flight_ids = {}

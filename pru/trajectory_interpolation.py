@@ -6,8 +6,8 @@ Functions to interpolate trajectory position data.
 
 import numpy as np
 import pandas as pd
-from .EcefPath import PointType, EcefPath
-from .ecef_functions import calculate_EcefPoints, calculate_LatLongs
+from via_sphere import calculate_latitudes, calculate_longitudes
+from .SpherePath import PointType
 from .trajectory_functions import calculate_date_times, calculate_speed, \
     calculate_vertical_speed, convert_angle_to_track_angle
 from .trajectory_fields import POSITION_FIELDS
@@ -20,53 +20,6 @@ DEFAULT_TURN_INTERVAL = 5.0
 
 POSITION_FIELD_LIST = POSITION_FIELDS.split(',')[:-4]
 """ The output position fields. """
-
-
-def interpolate_time_profile_by_distance(timep, distances):
-    """
-    Interpolate elapsed_times at the distance values.
-
-    Uses the scipy.interpolate.CubicSpline function to interpolate
-    times at the required distances.
-
-    Parameters
-    ----------
-    timep: a TimeProfile
-        A TimeProfile object.
-
-    distances: float array
-        An ordered array of distances in [Nautical Miles].
-
-    Returns
-    -------
-    times : float array
-        The elapsed_times at the given distance values in [Seconds].
-    """
-    return timep.interpolate_by_distance(distances)
-
-
-def interpolate_time_profile_by_elapsed_time(timep, times):
-    """
-    Interpolate distances at the elapsed time values.
-
-    Uses the scipy.interpolate.CubicSpline function to interpolate
-    distances at the required elapsed times.
-
-    Parameters
-    ----------
-    timep: a TimeProfile
-        A TimeProfile object.
-
-    times: float array
-        An ordered array of elapsed_times in [Seconds].
-
-    Returns
-    -------
-
-    distances : float array
-        The distances at the given time values in [Nautical Miles].
-    """
-    return timep.interpolate_by_elapsed_time(times)
 
 
 def calculate_interpolation_times(point_times, point_types,
@@ -92,6 +45,7 @@ def calculate_interpolation_times(point_times, point_types,
     -------
     times : float array
         The elapsed times at the requried intervals in [Seconds].
+
     """
     prev_time = point_times[0]
     times = [prev_time]
@@ -128,6 +82,7 @@ def calculate_speeds(times, distances):
     -------
     speeds : float array
         The speeds in [Knots].
+
     """
     delta_times = np.ediff1d(times)
     delta_distances = np.ediff1d(distances)
@@ -153,6 +108,7 @@ def calculate_vertical_speeds(times, altitudes):
     -------
     vertical_speeds : float array
         The vertical_speeds in [feet per minute].
+
     """
     delta_times = np.ediff1d(times)
     delta_altitudes = np.ediff1d(altitudes)
@@ -164,17 +120,17 @@ def calculate_vertical_speeds(times, altitudes):
 
 def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interval):
     """
-    Interpolate trajectory positions from a smoothed trajectory
+    Interpolate trajectory positions from a smoothed trajectory.
 
     The function:
-        - converts the SmoothedTrajectory HorizontalPath into an EcefPath
+        - converts the SmoothedTrajectory HorizontalPath into an SpherePath
         - get the turn point distances and point types from ecef_path
         - calls calculate_interpolation_times to get the output times
-        - calls interpolate_time_profile_by_elapsed_time to get the distances
+        - calls time_profile.interpolate_by_elapsed_time to get the distances
         - calls AltitudeProfile.interpolate, ecef_path.calculate_positions, etc
         to calculate interpolated altitudes, positions, speeds, etc. at the distances.
 
-    Parameters
+    Parameterscd ../ap
     ----------
     smooth_traj: SmoothedTrajectory
         A SmoothedTrajectory containing the flight id, smoothed horizontal path,
@@ -190,8 +146,9 @@ def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interv
     -------
     positions: a pandas DataFrame
         The interpolated trajectory positions.
+
     """
-    # Construct the EcefPath corresponding to the HorizontalPath
+    # Construct the SpherePath corresponding to the HorizontalPath
     ecef_path = smooth_traj.path.ecef_path()
 
     # Get the turn point distances from ecef_path
@@ -205,7 +162,8 @@ def interpolate_trajectory_positions(smooth_traj, straight_interval, turn_interv
 
     # calculate points at path disatnces
     points = ecef_path.calculate_positions(distances)
-    lats, lons = calculate_LatLongs(points)
+    lats = calculate_latitudes(points)
+    lons = calculate_longitudes(points)
 
     # calculate speeds, etc from times, distances and altitudes
     speeds = calculate_speeds(times, distances)

@@ -7,6 +7,7 @@ This module supports Earth Centred Earth Fixed (ECEF) coordinates.
 import numpy as np
 from .EcefPoint import lat_long_to_xyz, distance_radians, EcefPoint
 from .EcefArc import EcefArc
+from .trajectory_functions import find_most_extreme_value
 
 
 def calculate_EcefPoints(lats, longs):
@@ -110,23 +111,6 @@ def calculate_distances(ecef_points, ref_point):
     return distances
 
 
-def find_furthest_distance(ecef_points):
-    """
-    Returns the distance (and index) of the furthest point from the start.
-
-    Parameters
-    ----------
-    ecef_points: EcefPoints array
-        An array of EcefPoints.
-
-    Returns
-    -------
-    The distance and index of the furthest point from the first point.
-    """
-    distances = calculate_distances(ecef_points, ecef_points[0])
-    return distances.max(), distances.argmax()
-
-
 def calculate_position(ecef_points, index, ratio=0.0):
     """
     The position of a point at index and ratio along a list of EcefPoints.
@@ -204,28 +188,6 @@ def calculate_atds(arc, ecef_points):
         atds[i] = arc.along_track_distance(point)
 
     return atds
-
-
-def find_most_extreme_value(values):
-    """
-    Find the most extreme (signed) value and index of the value.
-
-    Parameters
-    ----------
-    values: float array
-        An array of signed values.
-
-    Returns
-    -------
-    The value and index of the most extreme value.
-    """
-    max_value = values.max()
-    min_value = values.min()
-    max_value_index = values.argmin() if (max_value < -min_value) \
-        else values.argmax()
-    max_value = min_value if (max_value < -min_value) else max_value
-
-    return max_value, max_value_index
 
 
 def calculate_EcefArcs(ecef_points):

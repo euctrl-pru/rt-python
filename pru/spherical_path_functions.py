@@ -2,67 +2,68 @@
 # Consult your license regarding permissions and restrictions.
 
 """
-Horizontal path functions.
+Spherical path functions.
 """
 
 import numpy as np
 import scipy.stats
-from .EcefPoint import EcefPoint, distance_radians, SQ_MIN_LENGTH
-from .EcefArc import EcefArc
-from .TurnArc import MIN_TURN_ANGLE, MAX_TURN_ANGLE
-from .EcefPath import EcefPath
+from via_sphere import MIN_LENGTH, distance_radians, Arc3d, \
+    calculate_xtds, calculate_atds, calculate_distances, \
+    calculate_bisector, to_array
 from .trajectory_functions import find_most_extreme_value
-from .ecef_functions import calculate_xtds, calculate_atds, \
-    calculate_distances
+from .SphereTurnArc import MIN_TURN_ANGLE, MAX_TURN_ANGLE
+from .SpherePath import SpherePath
 
 TWENTY_NM = np.deg2rad(1.0 / 3.0)
 TWO_NM = np.deg2rad(1.0 / 30.0)
+HALF_PI = np.pi / 2.0
+MAX_LENGTH = np.pi - MIN_LENGTH
 
 MINIMUM_ARC_LENGTH = np.deg2rad(0.1 / 60.0)
 """ The minimum arc length in radians, 0.1 NM. """
 
 
-def find_furthest_distance(ecef_points):
+def find_furthest_distance(points):
     """
     Find the distance (and index) of the furthest point from the start.
 
     Parameters
     ----------
-    ecef_points: EcefPoints array
-        An array of EcefPoints.
+    points: numpy array of Point3ds
+        The points in spherical vector coordinates.
 
     Returns
     -------
     The distance and index of the furthest point from the first point.
 
     """
-    distances = calculate_distances(ecef_points, ecef_points[0])
+    distances = calculate_distances(points, points[0])
     return distances.max(), distances.argmax()
 
 
-def find_extreme_point_along_track_index(arc, ecef_points, threshold):
+def find_extreme_point_along_track_index(arc, points, threshold):
     """
     Find the index of the point furthest along the Arc.
 
     Parameters
     ----------
-    arc: EcefArc
+    arc: Arc3d
         The Arc to compare the point to.
 
-    ecef_points: numpy array of EcefPoints
-        The points in ECEF coordinates.
+    points: numpy array of Point3ds
+        The points in spherical vector coordinates.
 
     threshold: float
-        The along track distance threshold.
+        The along track distance threshold [radians].
 
     Returns
     -------
-        The index of the point furthest along the Arc if further than
-        threshold from the start or end of the Arc, otherwise zero.
+    The index of the point furthest along the Arc if further than
+    threshold from the start or end of the Arc, otherwise zero.
 
     """
-    atds = calculate_atds(arc, ecef_points)
-    max_atd = atds.max() - arc.length
+    atds = calculate_atds(arc, points)
+    max_atd = atds.max() - arc.length()
     min_atd = -atds.min()
     if max(min_atd, max_atd) > threshold:
         return atds.argmax() if min_atd < max_atd else atds.argmin()
@@ -70,11 +71,12 @@ def find_extreme_point_along_track_index(arc, ecef_points, threshold):
     return 0
 
 
-def find_extreme_point_index(ecef_points, first_index, last_index,
+def find_extreme_point_index(points, first_index, last_index,
                              threshold, xtd_ratio, calc_along_track):
     """
-    The index of the point furthest from the Arc between first_index and
-    last_index.
+    Find the index of the point in points furthest from the Arc.
+
+    The points are searched between first_index and last_index.
 
     If the Arc is longer than MINIMUM_ARC_LENGTH, it finds the point with the
     largest across track distance. If the distance is larger than threshold
@@ -88,8 +90,8 @@ def find_extreme_point_index(ecef_points, first_index, last_index,
 
     Parameters
     ----------
-    ecef_points: numpy array of EcefPoints
-        The trajectory points in ECEF coordinates.
+    points: numpy array of Point3ds
+        The trajectory points in spherical vector coordinates.
 
     first_index, last_index: integers
         Indicies of the first and last points to use.
@@ -101,20 +103,21 @@ def find_extreme_point_index(ecef_points, first_index, last_index,
     -------
     The index of the point furthest from the Arc joining the points at
     first_index and last_index.
+
     """
     max_xtd_index = last_index
     # If there is at least a point between first_index and last_index
     if ((last_index - first_index) > 1):
-        arc = EcefArc(ecef_points[first_index], ecef_points[last_index])
+        arc = Arc3d(points[first_index], points[last_index])
         # first point is after arc start
-        if arc.length > MINIMUM_ARC_LENGTH:
+        if arc.length() > MINIMUM_ARC_LENGTH:
             # calculate cross track distances relative to the base arc
-            xtds = calculate_xtds(arc, ecef_points[first_index + 1: last_index])
+            xtds = calculate_xtds(arc, points[first_index + 1: last_index])
             max_xtd, xtd_index = find_most_extreme_value(xtds)
             xtd_index += 1
             # set the threshold to the minimum of the threshold or a
             # fraction of the arc length
-            xtd_threshold = min(threshold, xtd_ratio * arc.length)
+            xtd_threshold = min(threshold, xtd_ratio * arc.length())
             xtd_threshold = max(xtd_threshold, MINIMUM_ARC_LENGTH)
             if (np.abs(max_xtd) > xtd_threshold):
                 # if the point is further than the threshold, return it
@@ -122,33 +125,33 @@ def find_extreme_point_index(ecef_points, first_index, last_index,
             elif calc_along_track:  # points are in-line
                 # test whether a point is past the start or end of the arc
                 atd_index = find_extreme_point_along_track_index(
-                    arc, ecef_points[first_index: last_index], MINIMUM_ARC_LENGTH)
+                    arc, points[first_index: last_index], MINIMUM_ARC_LENGTH)
                 if atd_index:
                     max_xtd_index = first_index + atd_index
         else:  # short arc
             # calculate the furthest point from the start point
             distance, xtd_index = \
-                find_furthest_distance(ecef_points[first_index: last_index])
+                find_furthest_distance(points[first_index: last_index])
             if (distance > MINIMUM_ARC_LENGTH):
                 # ensure that the point is far enough from the end point
                 xtd_index += first_index
-                end_distance = distance_radians(ecef_points[xtd_index],
-                                                ecef_points[last_index])
+                end_distance = distance_radians(points[xtd_index],
+                                                points[last_index])
                 if end_distance > MINIMUM_ARC_LENGTH:
                     max_xtd_index = xtd_index
 
     return max_xtd_index
 
 
-def find_extreme_point_indicies(ecef_points, threshold, *,
+def find_extreme_point_indicies(points, threshold, *,
                                 xtd_ratio=0.1, calc_along_track=False):
     """
-    The indicies of the most extreme points including the first and last points.
+    Find indicies of the most extreme points including the first and last points.
 
     Parameters
     ----------
-    ecef_points: numpy array of EcefPoints
-        The trajectory points in ECEF coordinates.
+    points: numpy array of Point3ds
+        The trajectory points in spherical vector coordinates.
 
     threshold: float
         The across track distance threshold [radians]
@@ -164,17 +167,18 @@ def find_extreme_point_indicies(ecef_points, threshold, *,
     joining the points at first_index and last_index.
     If the maximum across track distance is less than threshold,
     returns last_index.
+
     """
-    finish_index = len(ecef_points) - 1
+    finish_index = len(points) - 1
     start_index = 0
     indicies = np.zeros(1, dtype=int)
 
-    if (2 < len(ecef_points)):
+    if (2 < len(points)):
         # ensure that a point is further tha threshold from the start point
-        distance, index = find_furthest_distance(ecef_points)
+        distance, index = find_furthest_distance(points)
         if threshold < distance:
             # calculate the index of the most extreme point
-            index = find_extreme_point_index(ecef_points, start_index,
+            index = find_extreme_point_index(points, start_index,
                                              finish_index, threshold,
                                              xtd_ratio, calc_along_track)
             last_index = finish_index
@@ -195,7 +199,7 @@ def find_extreme_point_indicies(ecef_points, threshold, *,
                     last_index = last_indicies.pop()
 
                 # calculate the index of the next extreme point
-                index = find_extreme_point_index(ecef_points, start_index,
+                index = find_extreme_point_index(points, start_index,
                                                  last_index, threshold,
                                                  xtd_ratio, calc_along_track)
 
@@ -204,66 +208,66 @@ def find_extreme_point_indicies(ecef_points, threshold, *,
     return indicies
 
 
-def fit_arc_to_points(ecef_points, arc):
+def fit_arc_to_points(points, arc):
     """
-    Calculates a closest arc through ecef_points.
+    Calculate a closest arc through points.
 
-    Note: there must be at least 2 ecef_points.
+    Note: there must be at least 2 points.
 
     Parameters
     ----------
-    ecef_points: numpy array of EcefPoints
-        The points in ECEF coordinates.
+    points: numpy array of Point3ds
+        The points in spherical vector coordinates.
 
-    arc: EcefArc
+    arc: Arc3d
         An initial arc to match the ecef_points.
 
     Returns
     -------
-        A closest arc through ecef_points, minimising their across track distances.
+    A closest arc through points, minimising their across track distances.
+
     """
-    atds = calculate_atds(arc, ecef_points)
-    xtds = calculate_xtds(arc, ecef_points)
+    atds = calculate_atds(arc, points)
+    xtds = calculate_xtds(arc, points)
     # calculate the slope and intercept of the closest line through the  points
     slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(atds, xtds)
-    a = arc.perp_position(arc.a, intercept)
-    b = arc.perp_position(arc.b, intercept + arc.length * slope)
-    return EcefArc(a, b)
+    a = arc.perp_position(arc.a(), intercept)
+    b = arc.perp_position(arc.b(), intercept + arc.length() * slope)
+    return Arc3d(a, b)
 
 
 def calculate_intersection(prev_arc, arc):
     """
-    Calculates the intersection point between a pair of arcs.
+    Calculate the intersection point between a pair of arcs.
 
     If the arcs are on (or very close to) the same Great Circle, it returns
     the start point of the second arc.
 
     Parameters
     ----------
-    prev_arc, arc: EcefArcs
+    prev_arc, arc: Arc3ds
         The arcs before and after the intersection.
 
     Returns
     -------
-        The intersection point of the arcs.
-    """
-    coords = np.cross(prev_arc.pole, arc.pole)
-    norm = np.dot(coords, coords)
-    if norm > SQ_MIN_LENGTH:
-        coords /= np.sqrt(norm)
-        # test for antipodal intersection point
-        coords = -coords if (np.dot(coords, arc.a) < 0.0) else coords
-    else:  # same Great Circle
-        coords = arc.a
+    The intersection point of the arcs.
 
-    return EcefPoint(coords)
+    """
+    intersection = Arc3d(prev_arc.pole(), arc.pole())
+    if MIN_LENGTH < intersection.length() < MAX_LENGTH:
+        intersection_point = intersection.pole()
+        # swap sign if intersection_point is antipodal point
+        return -intersection_point \
+            if distance_radians(arc.a(), intersection_point) > HALF_PI else \
+            intersection_point
+    else:
+        return arc.a()
 
 
 def calculate_max_turn_initiation_distance(in_length, out_length, *,
                                            max_distance=TWENTY_NM):
     """
-    Calculate the maximum initation distance of a turn from its inbound and
-    outbound leg lengths.
+    Calculate the maximum initation distance of a turn.
 
     Note: the default maximum intiation distance is 20 NM, see ICAO 9905
     AN/471 Required Navigation Performance Authorization
@@ -278,7 +282,8 @@ def calculate_max_turn_initiation_distance(in_length, out_length, *,
 
     Returns
     -------
-        The maximum turn initation distance [radians].
+    The maximum turn initation distance [radians].
+
     """
     return min(min(in_length, out_length) / 2, max_distance)
 
@@ -290,13 +295,13 @@ def calculate_turn_initiation_distance(prev_arc, arc, point,
 
     Parameters
     ----------
-    prev_arc: EcefArc
+    prev_arc: Arc3d
         The inbound path leg.
 
-    arc: EcefArc
+    arc: Arc3d
         The outbound path leg.
 
-    point: EcefPoint
+    point: Point3d
         A point between the inbound and outbound legs.
 
     max_distance : float
@@ -307,11 +312,11 @@ def calculate_turn_initiation_distance(prev_arc, arc, point,
 
     Returns
     -------
-        The turn initation distance [radians].
+    The turn initation distance [radians].
 
     """
     # Calculate the distance from the intersection to the point
-    distance = distance_radians(arc.a, point)
+    distance = distance_radians(arc.a(), point)
     if distance < max_distance:
         xtd_in = abs(prev_arc.cross_track_distance(point))
         xtd_out = abs(arc.cross_track_distance(point))
@@ -319,14 +324,13 @@ def calculate_turn_initiation_distance(prev_arc, arc, point,
         # determine whether the point is close to either leg
         if (xtd_in > threshold) and (xtd_out > threshold):
             # calculate the bisector of the turn legs
-            pole = EcefPoint(prev_arc.pole + arc.pole)
-            pole.normalize()
-            xtd = abs(np.arcsin(np.dot(pole, point)))
+            bisector = calculate_bisector(prev_arc, arc)
+            xtd = abs(bisector.cross_track_distance(point))
             if xtd < distance:
                 # calculate the angle from the bisector of the turn legs
                 # Note: use arccos since the bisector is prependicular to pole
                 angle = np.arccos(xtd / distance)
-                half_turn_angle = abs(prev_arc.turn_angle(arc.b)) / 2
+                half_turn_angle = abs(prev_arc.turn_angle(arc.b())) / 2
                 # calculate the turn radius
                 cos_angle = np.cos(angle)
                 cos_half_turn_angle = np.cos(half_turn_angle)
@@ -342,52 +346,55 @@ def calculate_turn_initiation_distance(prev_arc, arc, point,
     return min(distance, max_distance)
 
 
-def derive_horizontal_path(ecef_points, threshold, calc_along_track=False):
+def derive_horizontal_path(points, threshold, calc_along_track=False):
     """
-    Derive horizontal path waypoints and turn anticipation distances from
-    ECEF points.
+    Derive horizontal path waypoints and turn anticipation distances from points.
 
     Parameters
     ----------
-    ecef_points: numpy array of EcefPoints
-        The trajectory points in ECEF coordinates.
+    points: numpy array of Point3ds
+        The trajectory points in spherical vector coordinates.
 
     threshold: float
-        The across track distance threshold [radians]
+        The across track distance threshold [radians].
+
+    calc_along_track : Boolean
+        Calculate the along track distance, default False.
 
     Returns
     -------
-        The EcefPath between the ecef_points.
+    The SpherePath between the points.
+
     """
     # Find extreme points and their indicies in the ecef_points array
-    indicies = find_extreme_point_indicies(ecef_points, threshold,
+    indicies = find_extreme_point_indicies(points, threshold,
                                            calc_along_track=calc_along_track)
-    extreme_points = ecef_points[[indicies]]
+    extreme_points = points[[indicies]]
 
     # Calculate the Great Circle arc along the first route leg
     prev_index = 0
     index = indicies[1]
-    prev_arc = EcefArc(extreme_points[0], extreme_points[1])
-    prev_arc = fit_arc_to_points(ecef_points[prev_index: index + 1], prev_arc)
+    prev_arc = Arc3d(extreme_points[0], extreme_points[1])
+    prev_arc = fit_arc_to_points(points[prev_index: index + 1], prev_arc)
 
     # Create lists for the waypoints and turn initiation distances
     # Starting with the first point
-    path_waypoints = [EcefPoint(prev_arc.a)]
+    path_waypoints = [prev_arc.a()]
     turn_distances = [0.0]
 
-    prev_length = prev_arc.length
+    prev_length = prev_arc.length()
     for i in range(1, len(extreme_points) - 1):
         # Calculate the Great Circle arc along the next route leg
         prev_index = index
         index = indicies[i + 1]
-        arc = EcefArc(extreme_points[i], extreme_points[i + 1])
-        arc = fit_arc_to_points(ecef_points[prev_index: index + 1], arc)
+        arc = Arc3d(extreme_points[i], extreme_points[i + 1])
+        arc = fit_arc_to_points(points[prev_index: index + 1], arc)
 
         # Calculate the turn parameters at the waypoint
-        turn_angle = prev_arc.turn_angle(arc.b)
-        max_turn_distance = calculate_max_turn_initiation_distance(prev_length, arc.length)
+        turn_angle = prev_arc.turn_angle(arc.b())
+        max_turn_distance = calculate_max_turn_initiation_distance(prev_length, arc.length())
 
-        waypoint = EcefPoint(arc.a)
+        waypoint = arc.a()
         turn_distance = 0.0
 
         # Determine whether the turn is valid, calculate waypoint and
@@ -397,18 +404,17 @@ def derive_horizontal_path(ecef_points, threshold, calc_along_track=False):
         if is_valid_turn:
             waypoint = calculate_intersection(prev_arc, arc)
             turn_distance = calculate_turn_initiation_distance(prev_arc, arc,
-                                                               ecef_points[prev_index + 1],
+                                                               points[prev_index + 1],
                                                                max_turn_distance,
                                                                threshold / 4.0)
-
-        turn_distances.append(turn_distance)
         path_waypoints.append(waypoint)
+        turn_distances.append(turn_distance)
 
         prev_arc = arc
-        prev_length = arc.length
+        prev_length = arc.length()
 
     # Add the last point
-    path_waypoints.append(EcefPoint(prev_arc.b))
+    path_waypoints.append(prev_arc.b())
     turn_distances.append(0.0)
 
-    return EcefPath(path_waypoints, turn_distances)
+    return SpherePath(to_array(path_waypoints), np.array(turn_distances))
