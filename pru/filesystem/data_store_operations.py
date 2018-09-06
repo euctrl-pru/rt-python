@@ -259,7 +259,8 @@ def get_unprocessed(data_type, data_date, local_path_string=UPLOAD_DIR):
     if valid:
         _, tail = path.split(UPLOAD_DIR)
         source_path = tail + '/' + data_type
-        destination_path = local_path_string + "/" + data_type
+        destination_path = '/'.join([local_path_string, data_type]) \
+            if local_path_string == UPLOAD_DIR else local_path_string
         log.debug("Source path: " + source_path + " destnation path: " + destination_path)
         objects = list_bucket_objects(source_path)
         names = [obj.name for obj in objects]
@@ -287,7 +288,8 @@ def get_airspaces(airspaces_file_name, local_path_string=DATA_HOME):
     ----------
     local_path_string is defaulted to the known local airspaces data location.
     """
-    destination_path = '/'.join([local_path_string, AIRSPACES])
+    destination_path = '/'.join([local_path_string, AIRSPACES]) \
+        if local_path_string == DATA_HOME else local_path_string
     objects = list_bucket_objects(AIRSPACES)
     filtered_objects = [obj for obj in objects if airspaces_file_name in obj.name]
     log.debug("Getting airspaces file: " + str(filtered_objects) + " to: " +
@@ -305,7 +307,8 @@ def get_user_airspaces(user_airspaces_file_name, local_path_string=DATA_HOME):
     ----------
     local_path_string is defaulted to the known local user airspaces data location.
     """
-    destination_path = '/'.join([local_path_string, AIRSPACES])
+    destination_path = '/'.join([local_path_string, AIRSPACES]) \
+        if local_path_string == DATA_HOME else local_path_string
     objects = list_bucket_objects(AIRSPACES)
     filtered_objects = [obj for obj in objects if user_airspaces_file_name in obj.name]
     log.debug("Getting user airspaces file: " + str(filtered_objects) + " to: " +
@@ -323,7 +326,8 @@ def get_airports(airports_file_name, local_path_string=DATA_HOME):
     ----------
     local_path_string is defaulted to the known local airport data location.
     """
-    destination_path = '/'.join([local_path_string, AIRPORTS])
+    destination_path = '/'.join([local_path_string, AIRPORTS]) \
+        if local_path_string == DATA_HOME else local_path_string
     objects = list_bucket_objects(AIRPORTS)
     filtered_objects = [obj for obj in objects if airports_file_name in obj.name]
     log.debug("Getting airports file: " + str(filtered_objects) + " to: " +
@@ -341,7 +345,8 @@ def get_stands(stands_file_name, local_path_string=DATA_HOME):
     ----------
     local_path_string is defaulted to the known local airport data location.
     """
-    destination_path = '/'.join([local_path_string, AIRPORTS_STANDS])
+    destination_path = '/'.join([local_path_string, AIRPORTS_STANDS]) \
+        if local_path_string == DATA_HOME else local_path_string
     objects = list_bucket_objects(AIRPORTS_STANDS)
     filtered_objects = [obj for obj in objects if stands_file_name in obj.name]
     log.debug("Getting stands file: " + str(filtered_objects) + " to: " +
@@ -359,7 +364,8 @@ def get_apds(apds_filename, local_path_string=UPLOAD_DIR):
     apds_filename The file name
     """
     log.debug("Getting apds file: %s", apds_filename)
-    destination_path = local_path_string + "/" + APDS
+    destination_path = '/'.join([local_path_string, APDS]) \
+        if local_path_string == UPLOAD_DIR else local_path_string
     _, tail = path.split(UPLOAD_DIR)
     source_path = tail + '/' + APDS
     objects = list_bucket_objects(source_path)
