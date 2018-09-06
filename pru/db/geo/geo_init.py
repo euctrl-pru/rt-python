@@ -56,6 +56,10 @@ def remove_all_user_defined_sectors():
     try:
         db_user_connection = ctx.get_connection(ctx.CONTEXT,
                                                 ctx.DB_USER)
+    except OperationalError:
+        log.error("Could not get connection, probaly the user does not exist")
+        return False
+    try:
         schema_name = AsIs(ctx.CONTEXT[ctx.SCHEMA_NAME])
         with db_user_connection.cursor() as cursor:
             cursor.execute("DELETE FROM %s.user_defined_sectors;", [schema_name])
@@ -264,15 +268,18 @@ def add_airspace_geometry(airspace, context, connection):
     except DataError:
         log.exception('Failed to add airspace record ' + str(airspace) +
                       'to airspace table - DataError.')
-        return False
+        return False, 'Failed to add airspace record ' + str(airspace) + \
+                      'to airspace table - DataError.'
     except ValueError:
         log.warning('Failed to add airspace record ' + str(airspace) +
                     'to airspace table - ValueError.')
-        return False
+        return False, 'Failed to add airspace record ' + str(airspace) + \
+                      'to airspace table - ValueError.'
     except InternalError:
         log.exception('Failed to add airspace record ' + str(airspace) +
                       'to airspace table - InternalError.')
-        return False
+        return False, 'Failed to add airspace record ' + str(airspace) + \
+                      'to airspace table - InternalError.'
     return True, id
 
 
@@ -337,15 +344,18 @@ def add_airport(airport, context, connection):
     except DataError:
         log.exception('Failed to add airport record ' + str(airport) +
                       'to airport table - DataError.')
-        return False
+        return False, 'Failed to add airport record ' + str(airport) + \
+                      'to airport table - DataError.'
     except ValueError:
         log.warning('Failed to add airport record ' + str(airport) +
                     'to airport table - ValueError.')
-        return False
+        return False, 'Failed to add airport record ' + str(airport) + \
+                      'to airport table - ValueError.'
     except InternalError:
         log.exception('Failed to add airport record ' + str(airport) +
                       'to airport table - InternalError.')
-        return False
+        return False, 'Failed to add airport record ' + str(airport) + \
+                      'to airport table - InternalError.'
     return True, id
 
 
@@ -488,7 +498,7 @@ def load_airspace(sectors_file, context, connection):
             count = 0
             bad_records = []
             for airspace in airspace_source:
-                if add_airspace_geometry(airspace, context, connection):
+                if add_airspace_geometry(airspace, context, connection)[0]:
                     count += 1
                 else:
                     bad_records.append(airspace)
@@ -518,7 +528,7 @@ def load_airports(airports_file, context, connection):
             count = 0
             bad_records = []
             for airport in airports_source:
-                if add_airport(airport, context, connection):
+                if add_airport(airport, context, connection)[0]:
                     count += 1
                 else:
                     bad_records.append(airport)
