@@ -14,8 +14,8 @@ ARG PROJECT_HOME=/pru-python
 # Base dir for pru files
 ARG PRU_HOME=/pru
 
-# What kind of deployment is it: int, ta, test etc
-ARG DEPLOYMENT_TYPE=int
+# What kind of deployment is it: pru, int, ta, test etc
+ARG DEPLOYMENT_TYPE=pru
 
 # The name of the PEM file.  See the secrets configuration 
 ARG PEM_FILE=pem-file.json
