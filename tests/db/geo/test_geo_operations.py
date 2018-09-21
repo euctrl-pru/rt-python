@@ -264,7 +264,7 @@ class TestFindAirspaceByDBId(unittest.TestCase):
         res = find_airspace_by_database_ID(sector_1_id, context, connection, is_user_defined=False)
         self.assertEquals(1, len(res))
         sector = res[0]
-        self.assertEquals(10, len(sector))
+        self.assertEquals(11, len(sector))
 
         user_sector_1 = [self.ORG_ID, self.USER_ID, self.SECTOR_NAME, self.LAT,
                          self.LON, self.RAD, self.USER_MIN_FLIGHT_LEVEL,
@@ -274,7 +274,7 @@ class TestFindAirspaceByDBId(unittest.TestCase):
         res = find_airspace_by_database_ID(user_sector_1_id, context, connection, is_user_defined=True)
         self.assertEquals(1, len(res))
         user_sector = res[0]
-        self.assertEquals(11, len(user_sector))
+        self.assertEquals(12, len(user_sector))
         self.assertEquals(self.ORG_ID, user_sector['org_id'])
         self.assertEquals(self.USER_ID, user_sector['user_id'])
         self.assertEquals(self.SECTOR_NAME, user_sector['sector_name'])
@@ -288,7 +288,7 @@ class TestFindAirspaceByDBId(unittest.TestCase):
         res = find_airspace_by_database_ID(user_sector_2_id, context, connection, is_user_defined=True)
         self.assertEquals(1, len(res))
         user_sector_2 = res[0]
-        self.assertEquals(11, len(user_sector))
+        self.assertEquals(12, len(user_sector))
         self.assertEquals(self.ORG_ID, user_sector_2['org_id'])
         self.assertEquals(self.USER_ID, user_sector_2['user_id'])
         self.assertEquals(self.SECTOR_NAME_2, user_sector_2['sector_name'])

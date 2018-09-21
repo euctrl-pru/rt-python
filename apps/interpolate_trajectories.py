@@ -14,7 +14,7 @@ from pru.trajectory_interpolation import interpolate_trajectory_positions, \
     DEFAULT_STRAIGHT_INTERVAL, DEFAULT_TURN_INTERVAL
 from pru.trajectory_fields import ISO8601_DATETIME_US_FORMAT, BZ2_FILE_EXTENSION, \
     CSV_FILE_EXTENSION, JSON_FILE_EXTENSION, has_bz2_extension, POSITION_FIELDS
-from pru.trajectory_files import TRAJECTORIES, REF_POSITIONS
+from pru.trajectory_files import TRAJECTORIES, SYNTH_POSITIONS
 from pru.logger import logger
 
 log = logger(__name__)
@@ -64,7 +64,7 @@ def interpolate_trajectories(filename,
     log.info(f'Straight interval: {straight_interval} seconds')
     log.info(f'Turn interval: {turn_interval} seconds')
 
-    output_filename = trajectories_filename.replace(TRAJECTORIES, REF_POSITIONS)
+    output_filename = trajectories_filename.replace(TRAJECTORIES, SYNTH_POSITIONS)
     output_filename = output_filename.replace(JSON_FILE_EXTENSION,
                                               CSV_FILE_EXTENSION)
     try:

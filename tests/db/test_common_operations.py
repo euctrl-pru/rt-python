@@ -21,3 +21,14 @@ class Test_Common_Operations(unittest.TestCase):
         remove_ref_db()
         create(DB_TYPE_GEO)
         create(DB_TYPE_REF)
+
+
+def suite():
+    suite = unittest.TestSuite()
+    suite.addTest(Test_Common_Operations('test_remove_db_then_create'))
+    return suite
+
+
+if __name__ == '__main__':
+    runner = unittest.TextTestRunner()
+    runner.run(suite())

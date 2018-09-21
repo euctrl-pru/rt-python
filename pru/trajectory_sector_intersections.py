@@ -69,7 +69,8 @@ def find_trajectory_section_sector_intersections(smooth_traj, traj_path,
     path_lons = calculate_longitudes(positions)
     lats, lons, volume_ids = find_horizontal_sector_intersections(smooth_traj.flight_id,
                                                                   path_lats, path_lons,
-                                                                  min_altitude, max_altitude)
+                                                                  int(min_altitude),
+                                                                  int(max_altitude))
     if len(lats):
         # A dict to hold the intersected volumes
         volumes = {}

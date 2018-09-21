@@ -39,11 +39,6 @@ class TestTrajectoryFiles(unittest.TestCase):
         test_date = '2017-08-01'
         self.assertEqual(create_positions_filename(REF, test_date), test_name)
 
-    def test_create_ref_positions_filename(self):
-        test_name = 'fr24_ref_positions_2017-08-01.csv'
-        test_date = '2017-08-01'
-        self.assertEqual(create_ref_positions_filename(FR24, test_date), test_name)
-
     def test_create_raw_positions_filename(self):
         test_name = 'raw_fr24_positions_2017-08-01.csv'
         test_date = '2017-08-01'

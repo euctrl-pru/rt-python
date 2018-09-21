@@ -8,6 +8,16 @@
 # The context is a dictionary that contains all the required fields to make
 # a database connection.
 #
+# For unit testing the following must set on the shell, adjust to suite db
+# configuration.
+#
+# Local test settings for geo db
+# AIRSPACE_DB_SERVICE_HOST=192.168.0.12
+# AIRSPACE_DB_SERVICE_PORT=31904
+#
+# Local test settings for ref db
+# REFERENCE_DB_SERVICE_HOST=192.168.0.12
+# REFERENCE_DB_SERVICE_PORT=31700
 #
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
@@ -30,33 +40,27 @@ REF_DB_ADMIN = 'ref_db_admin'
 DB_USER = 'db_user'
 REF_DB_USER = 'ref_db_user'
 
+# If an env var is not set this value is used.  Be aware that the system may
+# not function correctly if there is a missing env var.
+DEFAULT_ENV_VALUE = ""
 
 # deployment = env.get("DEPLOYMENT")
 deployment = "unit"
 
 # The geo db deployment for this container
-geo_db_port = env.get("AIRSPACE_DB_SERVICE_PORT")
-geo_db_hostname = env.get("AIRSPACE_DB_SERVICE_HOST")
-
-# Local test settings for geo db
-# geo_db_port = "31700"
-# geo_db_hostname = "192.168.0.12"
+geo_db_port = env.get("AIRSPACE_DB_SERVICE_PORT", DEFAULT_ENV_VALUE)
+geo_db_hostname = env.get("AIRSPACE_DB_SERVICE_HOST", DEFAULT_ENV_VALUE)
 
 # The ref db deployment for this container
-ref_db_port = env.get("REFERENCE_DB_SERVICE_PORT")
-ref_db_hostname = env.get("REFERENCE_DB_SERVICE_HOST")
-
-# Local test settings for ref db
-# ref_db_port = "31700"
-# ref_db_hostname = "192.168.0.12"
-
+ref_db_port = env.get("REFERENCE_DB_SERVICE_PORT", DEFAULT_ENV_VALUE)
+ref_db_hostname = env.get("REFERENCE_DB_SERVICE_HOST", DEFAULT_ENV_VALUE)
 
 username = deployment + '_user'
 adminname = deployment + '_admin'
 dbname = deployment + '_data'
-user_db_password = env.get('USER_DB_PASSWORD')
-admin_db_password = env.get('ADMIN_DB_PASSWORD')
-postgres_db_password = env.get('POSTGRES_DB_PASSWORD')
+user_db_password = env.get('USER_DB_PASSWORD', DEFAULT_ENV_VALUE)
+admin_db_password = env.get('ADMIN_DB_PASSWORD', DEFAULT_ENV_VALUE)
+postgres_db_password = env.get('POSTGRES_DB_PASSWORD', DEFAULT_ENV_VALUE)
 
 
 # Context contains the connection string and connection details for the

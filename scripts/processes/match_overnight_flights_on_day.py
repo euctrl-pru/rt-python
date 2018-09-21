@@ -18,8 +18,8 @@ from pru.trajectory_files import create_match_overnight_flights_input_filenames,
     create_extract_overnight_data_output_filenames
 
 from pru.filesystem.data_store_operations import get_processed, put_processed, \
-    SOURCES_MERGED_DAILY_CPR_FR24, SOURCES_MERGED_OVERNIGHT_CPR_FR24, \
-    SOURCES_MERGED_OVERNIGHT_CPR_FR24_IDS
+    REFINED_MERGED_DAILY_CPR_FR24, REFINED_MERGED_OVERNIGHT_CPR_FR24, \
+    REFINED_MERGED_OVERNIGHT_CPR_FR24_IDS
 
 from apps.match_overnight_flights import match_overnight_flights, \
     DEFAULT_MAXIMUM_TIME_DELTA
@@ -47,7 +47,7 @@ def match_overnight_flights_on_day(date,
         log.info(f'Getting data for date: {date}')
 
         match_flights_files = create_match_overnight_flights_input_filenames(date)
-        if not get_processed(SOURCES_MERGED_DAILY_CPR_FR24, match_flights_files):
+        if not get_processed(REFINED_MERGED_DAILY_CPR_FR24, match_flights_files):
             log.error('Flights file not found in daily_cpr_fr24 bucket')
             return errno.ENOENT
 
@@ -57,12 +57,12 @@ def match_overnight_flights_on_day(date,
         gc.collect()
 
         prev_ids_filename = create_matching_ids_filename(PREV_DAY, date)
-        if not put_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24_IDS, [prev_ids_filename]):
+        if not put_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24_IDS, [prev_ids_filename]):
             log.error('Could not write ids to overnight_cpr_fr24/ids bucket')
             return errno.EACCES
 
         extract_data_input_files = create_extract_overnight_data_input_filenames(date)
-        if not get_processed(SOURCES_MERGED_DAILY_CPR_FR24, extract_data_input_files[2:]):
+        if not get_processed(REFINED_MERGED_DAILY_CPR_FR24, extract_data_input_files[2:]):
             log.error('Positions or events file not found in daily_cpr_fr24 bucket')
             return errno.ENOENT
 
@@ -71,7 +71,7 @@ def match_overnight_flights_on_day(date,
             return error_code
 
         extract_data_output_files = create_extract_overnight_data_output_filenames(date)
-        if not put_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24, extract_data_output_files):
+        if not put_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24, extract_data_output_files):
             log.error('Could not write to overnight_cpr_fr24 bucket')
             return errno.EACCES
 

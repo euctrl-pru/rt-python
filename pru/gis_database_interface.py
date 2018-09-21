@@ -5,11 +5,14 @@ GIS Database intersection functions.
 """
 from functools import reduce
 import pru.logger as logger
-from pru.db.geo.geo_operations import make_augmented_points_from_positions, make_geographic_trajectory
+from pru.db.common_operations import get_geo_db_connection, create_buffer, NM_CONVERSION_TO_M
+from pru.db.geo.geo_operations import make_augmented_points_from_positions
+from pru.db.geo.geo_operations import make_geographic_trajectory
 from pru.db.geo.geo_operations import make_augmented_trajectory, find_intersections
 from pru.db.geo.geo_operations import create_intersection_data_structure
-from pru.db.common_operations import get_geo_db_connection, create_buffer, NM_CONVERSION_TO_M
-from pru.db.geo.geo_operations import extract_details_from_intersection, find_line_poly_intersection_with_boundary, merge_l_t
+from pru.db.geo.geo_operations import extract_details_from_intersection
+from pru.db.geo.geo_operations import merge_l_t
+from pru.db.geo.geo_operations import find_line_poly_intersection_without_boundary
 from pru.db.geo.geo_operations import find_sector, make_sector_description
 from pru.db.geo.ap_geo_operations import extract_intersection_wkts
 from pru.db.geo.ap_geo_operations import finder as airport_finder
@@ -86,9 +89,10 @@ def find_horizontal_sector_intersections(flight_id, latitudes, longitudes,
     # Convert the points to a geographic feature
     geographic_trajectory = make_geographic_trajectory(augmented_points, flight_id, connection)
 
-    # Make a trajectory that contains the geo line, the augmented points and the 2D intersected sectors
+    # Make a trajectory that contains the geo line, the augmented points and
+    # the 2D intersected sectors
     augmented_trajectory = make_augmented_trajectory(
-        augmented_points, geographic_trajectory, flight_id, connection)
+        augmented_points, geographic_trajectory, flight_id, min_altitude, max_altitude, connection)
 
     # Find the 2D intersections
     intersections = find_intersections(
@@ -194,13 +198,13 @@ def find_airport_cylinder_intersection(flight_id, latitudes, longitudes,
         buffer = create_buffer(airport_lon, airport_lat, radius_m, connection)
 
         # The intersections between path and buffer
-        intersections = find_line_poly_intersection_with_boundary(
+        intersections = find_line_poly_intersection_without_boundary(
             geographic_trajectory, buffer, connection)
 
         # Organise the outputs
         intersection_wkts = extract_intersection_wkts(intersections)
 
-        # The origin dict included here just tells the eatract routine that
+        # The origin dict included here just tells the extract routine that
         # this is not an origin flight.
         intersection_details = extract_details_from_intersection("", intersection_wkts,
                                                                  {'is_origin': False}, flight_id)
@@ -254,7 +258,8 @@ def find_horizontal_user_airspace_intersections(flight_id, latitudes, longitudes
     E.g.
     [latitudes[0], latitudes[-1]], [longitudes[0], longitudes[-1]], ['id1', 'id2']
     """
-    log.debug("Finding user airspace intersections for flight %s, with min altitude %s and max altitude %s",
+    log.debug("Finding user airspace intersections for flight %s, with min "
+              "altitude %s and max altitude %s",
               flight_id, min_altitude, max_altitude)
 
     # Get the connection string
@@ -269,7 +274,7 @@ def find_horizontal_user_airspace_intersections(flight_id, latitudes, longitudes
     # Make a trajectory that contains the geo line, the augmented points and
     # the 2D user defined intersected sectors
     augmented_trajectory = make_augmented_trajectory(
-        augmented_points, geographic_trajectory, flight_id, connection, True)
+        augmented_points, geographic_trajectory, flight_id, min_altitude, max_altitude, connection, True)
 
     # Find the 2D intersections
     intersections = find_intersections(

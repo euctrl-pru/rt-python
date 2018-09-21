@@ -5,8 +5,8 @@
 #
 
 import unittest
-from pru.gis_database_interface import find_2D_user_airspace_intersections
-from pru.gis_database_interface import find_2D_airspace_intersections
+from pru.gis_database_interface import find_horizontal_user_airspace_intersections
+from pru.gis_database_interface import find_horizontal_sector_intersections
 from pru.gis_database_interface import find_airport_cylinder_intersection
 from pru.gis_database_interface import get_elementary_airspace_name, get_elementary_airspace_altitude_range
 from pru.gis_database_interface import get_user_sector_name, get_user_sector_altitude_range
@@ -67,6 +67,8 @@ class TestGISDBIntersectionsUser(unittest.TestCase):
         connection = ctx.get_connection(ctx.CONTEXT, ctx.DB_USER)
         context = ctx.CONTEXT
 
+        remove_all_sectors()
+
         # Define a trajectory
         FLIGHT_ID_1 = "test-id-1"
         MIN_ALT_1 = 1009
@@ -96,11 +98,9 @@ class TestGISDBIntersectionsUser(unittest.TestCase):
         # Add a custom sector to the user sectors
         ok, sector_1_id = add_user_sector(user_sector_1, context, connection)
         self.assertTrue(ok)
-
         # Find known intersecting trajectory intersections
-        res1 = find_2D_user_airspace_intersections(FLIGHT_ID_1, LATS_1, LONS_1, MIN_ALT_1, MAX_ALT_1)
+        res1 = find_horizontal_user_airspace_intersections(FLIGHT_ID_1, LATS_1, LONS_1, MIN_ALT_1, MAX_ALT_1)
         self.assertTrue(res1)
-
         # There should be at least one intersection with our artifical sector
         self.assertTrue(str(sector_1_id) in res1[2])
 
@@ -117,7 +117,7 @@ class TestGISDBIntersectionsUser(unittest.TestCase):
         self.assertEquals((1000, 15000), get_user_sector_altitude_range(recovered_sector_id_2))
 
         # Find known non-intersecting trajectory intersections
-        res2 = find_2D_user_airspace_intersections(FLIGHT_ID_2, LATS_2, LONS_2, MIN_ALT_2, MAX_ALT_2)
+        res2 = find_horizontal_user_airspace_intersections(FLIGHT_ID_2, LATS_2, LONS_2, MIN_ALT_2, MAX_ALT_2)
         # There should be no intersections with our artificial sector
         self.assertFalse(str(sector_1_id) in res2[2])
         connection.close()
@@ -206,7 +206,7 @@ class TestGISDBIntersectionsStandard(unittest.TestCase):
         self.assertTrue(ok)
 
         # Find known intersecting trajectory intersections
-        res1 = find_2D_airspace_intersections(FLIGHT_ID_1, LATS_1, LONS_1, MIN_ALT_1, MAX_ALT_1)
+        res1 = find_horizontal_sector_intersections(FLIGHT_ID_1, LATS_1, LONS_1, MIN_ALT_1, MAX_ALT_1)
         self.assertTrue(res1)
 
         # There should be at least one intersection with our artifical sector
@@ -233,7 +233,7 @@ class TestGISDBIntersectionsStandard(unittest.TestCase):
         self.assertEquals((10000, 20000), get_elementary_airspace_altitude_range(recovered_sector_id_2))
 
         # Find known non-intersecting trajectory intersections
-        res2 = find_2D_airspace_intersections(FLIGHT_ID_2, LATS_2, LONS_2, MIN_ALT_2, MAX_ALT_2)
+        res2 = find_horizontal_sector_intersections(FLIGHT_ID_2, LATS_2, LONS_2, MIN_ALT_2, MAX_ALT_2)
         # There should be no intersections with our artificial sector
         self.assertFalse(str(sector_1_id) in res2[2])
         connection.close()
@@ -362,19 +362,19 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         self.assertTrue(ok)
 
         # Flight terminates in the sector
-        terminates = find_2D_airspace_intersections(*self.TERMINATES_FLIGHT)
+        terminates = find_horizontal_sector_intersections(*self.TERMINATES_FLIGHT)
         terminates_lats = terminates[0]
         terminates_lons = terminates[1]
         terminates_ids = terminates[2]
-        self.assertEquals(1, len(terminates_lats))
-        self.assertEquals(1, len(terminates_lons))
-        self.assertEquals(1, len(terminates_ids))
+        self.assertEqual(1, len(terminates_lats))
+        self.assertEqual(1, len(terminates_lons))
+        self.assertEqual(1, len(terminates_ids))
         sectors = find_airspace_by_database_ID(str(terminates_ids[0]), context, connection)
-        self.assertEquals(1, len(sectors))
-        self.assertEquals(sectors[0][6], 'Made Up Sector')
+        self.assertEqual(1, len(sectors))
+        self.assertEqual(sectors[0][6], 'Made Up Sector')
 
         # Flight transits the sector
-        transits = find_2D_airspace_intersections(*self.TRANSIT_FLIGHT)
+        transits = find_horizontal_sector_intersections(*self.TRANSIT_FLIGHT)
         transit_lats = transits[0]
         transit_lons = transits[1]
         transit_ids = transits[2]
@@ -383,7 +383,7 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         self.assertEquals(2, len(transit_ids))
 
         # Flight transits the sector above the sector
-        transits = find_2D_airspace_intersections(*self.TRANSIT_TOO_HIGH_FLIGHT)
+        transits = find_horizontal_sector_intersections(*self.TRANSIT_TOO_HIGH_FLIGHT)
         transit_lats = transits[0]
         transit_lons = transits[1]
         transit_ids = transits[2]
@@ -392,7 +392,7 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         self.assertEquals(0, len(transit_ids))
 
         # Flight originates in the sector
-        originates = find_2D_airspace_intersections(*self.ORIGINATES_FLIGHT)
+        originates = find_horizontal_sector_intersections(*self.ORIGINATES_FLIGHT)
         originates_lats = originates[0]
         originates_lons = originates[1]
         originates_ids = originates[2]
@@ -415,7 +415,7 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         self.assertTrue(ok)
 
         # Terminates in the sector
-        terminates = find_2D_airspace_intersections(*self.TERMINATES_IN_COMBE_FLIGHT)
+        terminates = find_horizontal_sector_intersections(*self.TERMINATES_IN_COMBE_FLIGHT)
         terminates_lats = terminates[0]
         terminates_lons = terminates[1]
         terminates_ids = terminates[2]
@@ -424,7 +424,7 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
         self.assertEquals(5, len(terminates_ids))
 
         # Transits the sector
-        transits = find_2D_airspace_intersections(*self.TRANSITS_COMBE_FLIGHT)
+        transits = find_horizontal_sector_intersections(*self.TRANSITS_COMBE_FLIGHT)
         transit_lats = transits[0]
         transit_lons = transits[1]
         transit_ids = transits[2]
@@ -434,7 +434,7 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
 
         # Originates in the sector, should be an even number as we add in the
         # position if we originate
-        originates = find_2D_airspace_intersections(*self.ORIGINATES_IN_COMBE_FLIGHT)
+        originates = find_horizontal_sector_intersections(*self.ORIGINATES_IN_COMBE_FLIGHT)
         origin_lats = originates[0]
         origin_lons = originates[1]
         origin_sector_ids = originates[2]
@@ -624,12 +624,12 @@ class TestGISDBIntersectionsStandardWithSegments(unittest.TestCase):
 
         quad_sectors = [sector_1_id, sector_2_id, sector_3_id, sector_4_id]
 
-        sector_b_sw_ne_intersections = find_2D_airspace_intersections(*FLIGHT_SW_NE)
+        sector_b_sw_ne_intersections = find_horizontal_sector_intersections(*FLIGHT_SW_NE)
         # We should find six points of intersection, 1 at the sw corner, 4 in
         # the middle and 1 at the ne corner.
         self.assertEquals(6, len(sector_b_sw_ne_intersections[0]))
 
-        sector_b_s_n_intersections = find_2D_airspace_intersections(*FLIGHT_S_N)
+        sector_b_s_n_intersections = find_horizontal_sector_intersections(*FLIGHT_S_N)
         # Should find 4 intersections, 1 at southern boundary,
         # 2 in the common boundary and 1 at the northern boundary.
         self.assertEquals(4, len(sector_b_s_n_intersections[0]))
@@ -646,6 +646,8 @@ class TestGISDBFindIntersectionsUsersCylinders(unittest.TestCase):
 
         connection = ctx.get_connection(ctx.CONTEXT, ctx.DB_USER)
         context = ctx.CONTEXT
+
+        remove_all_sectors()
 
         # Define a trajectory
         FLIGHT_ID_1 = "test-id-1"
@@ -681,7 +683,7 @@ class TestGISDBFindIntersectionsUsersCylinders(unittest.TestCase):
         self.assertTrue(ok)
 
         # Find known intersecting trajectory intersections
-        res1 = find_2D_user_airspace_intersections(FLIGHT_ID_1, LATS_1, LONS_1, MIN_ALT_1, MAX_ALT_1)
+        res1 = find_horizontal_user_airspace_intersections(FLIGHT_ID_1, LATS_1, LONS_1, MIN_ALT_1, MAX_ALT_1)
         self.assertTrue(res1)
 
         # There should be at least one intersection with our artifical sector
@@ -694,7 +696,7 @@ class TestGISDBFindIntersectionsUsersCylinders(unittest.TestCase):
         self.assertEquals((1000, 15000), get_user_sector_altitude_range(sector_1_id))
 
         # Find known non-intersecting trajectory intersections
-        res2 = find_2D_user_airspace_intersections(FLIGHT_ID_2, LATS_2, LONS_2, MIN_ALT_2, MAX_ALT_2)
+        res2 = find_horizontal_user_airspace_intersections(FLIGHT_ID_2, LATS_2, LONS_2, MIN_ALT_2, MAX_ALT_2)
         # There should be no intersections with our artificial sector
         self.assertFalse(str(sector_1_id) in res2[2])
         connection.close()
@@ -748,11 +750,17 @@ class TestGISDBAirportIntersections(unittest.TestCase):
         AIRPORT_ID_1 = "NONO"
         AIRPORT_ID_2 = "LFPG"
 
+        connection = ctx.get_connection(ctx.CONTEXT, ctx.DB_USER)
+        context = ctx.CONTEXT
+        remove_all_airports()
+        make_aps_file = make_test_data_file(AIRPORTS_DATA_FILE)
+        load_airports(make_aps_file(), context, connection)
+
         ok, airports = finder('icao_ap_code', AIRPORT_ID_2)
         self.assertTrue(ok)
-        self.assertEquals(1, len(airports))
+        self.assertEqual(1, len(airports))
         airport = airports[0]
-        self.assertEquals(airport['icao_ap_code'], 'LFPG')
+        self.assertEqual(airport['icao_ap_code'], 'LFPG')
 
         FLIGHT_ID_1 = "test-1-id-1"
         LATS_1 = [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
@@ -765,14 +773,13 @@ class TestGISDBAirportIntersections(unittest.TestCase):
         # An airport we do not intersect with
         lats, lons = find_airport_cylinder_intersection(FLIGHT_ID_1, LATS_1, LONS_1,
                                                         AIRPORT_ID_1, RADIUS_1, False)
-        self.assertEquals(0, len(lats))
-        self.assertEquals(0, len(lons))
-
+        self.assertEqual(0, len(lats))
+        self.assertEqual(0, len(lons))
         # An airport we do intersect with
         lats, lons = find_airport_cylinder_intersection(FLIGHT_ID_2, LATS_2, LONS_2,
                                                         AIRPORT_ID_2, RADIUS_1, False)
-        self.assertEquals(1, len(lats))
-        self.assertEquals(1, len(lons))
+        self.assertEqual(1, len(lats))
+        self.assertEqual(1, len(lons))
 
 
 class TestGISDBFleetData(unittest.TestCase):

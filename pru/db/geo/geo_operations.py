@@ -71,18 +71,21 @@ def make_line_from_augmented_points(augmented_points, flight_id, connection):
     return cursor.fetchone()
 
 
-def find_sectors_intersected_by(line_string, flight_id, context, connection):
+def find_sectors_intersected_by(line_string, flight_id, min_altitude, max_altitude, context, connection):
     """
     Lists the airspace ids and details of those airspaces where the
-    given line string intersects.
+    given line string intersects excluding those that are outside of the range of
+    altitudes of the trajectory.
     """
     log.debug(f"Finding trajectory intersection with airspaces for flight id: {flight_id}")
     schema_name = context[ctx.SCHEMA_NAME]
     try:
         with connection.cursor() as cursor:
             query = "SELECT id, av_airspace_id, min_altitude, max_altitude " \
-                    "from %s.sectors where ST_Intersects(wkt, ST_GeographyFromText('SRID=4326;%s'));"
-            params = [AsIs(schema_name), AsIs(line_string)]
+                    "from %s.sectors where " \
+                    "NOT (max_altitude < %s OR min_altitude > %s) AND " \
+                    "ST_Intersects(wkt, ST_GeographyFromText('SRID=4326;%s'));"
+            params = [AsIs(schema_name), min_altitude,  max_altitude, AsIs(line_string)]
             cursor.execute(query, params)
             return cursor.fetchall()
     except InternalError:
@@ -91,7 +94,7 @@ def find_sectors_intersected_by(line_string, flight_id, context, connection):
         return []
 
 
-def find_user_sectors_intersected_by(line_string, flight_id, context, connection):
+def find_user_sectors_intersected_by(line_string, flight_id, min_altitude, max_altitude, context, connection):
     """
     Lists the user defined airspace uids and details of those airspaces where the
     given line string intersects.
@@ -102,64 +105,15 @@ def find_user_sectors_intersected_by(line_string, flight_id, context, connection
         with connection.cursor() as cursor:
             query = "SELECT id, org_id, min_altitude, max_altitude, user_id, " \
                     "sector_name from %s.user_defined_sectors where " \
+                    "NOT (max_altitude < %s OR min_altitude > %s) AND " \
                     "ST_Intersects(wkt, ST_GeographyFromText('SRID=4326;%s'));"
-            params = [AsIs(schema_name), AsIs(line_string)]
+            params = [AsIs(schema_name), min_altitude,  max_altitude, AsIs(line_string)]
             cursor.execute(query, params)
             return cursor.fetchall()
     except InternalError:
         log.exception(f"Failed whist trying to find the intersection between "
                       "a route with flight id {flight_id} and the airspace model.")
         return []
-
-
-def find_high_sectors(sectors, max_altitude):
-    """
-    Finds sectors that are above the max altitude of the trajectory.
-    """
-    return [sector for sector in sectors if int(sector[2]) > max_altitude]
-
-
-def find_low_sectors(sectors, min_altitude):
-    """
-    Finds sectors that are below the min altitude of the trajectory.
-    """
-    return [sector for sector in sectors if int(sector[3]) < min_altitude]
-
-
-def remove_sectors(sectors, sector_list):
-    """
-    Remove sectors from sector list.
-    """
-    return list(filterfalse(set(sectors).__contains__,
-                            sector_list))
-
-
-def eliminate_sectors(augmented_trajectory, min_altitude, max_altitude, flight_id):
-    """
-    Modifies the given extended trajectory by eliminating sectors that
-    the trajectory cannot intersect.
-    1/ Sectors whose max altitude is below the min altitude of the trajectory.
-    2/ Sectors whose min altitude is above the max altitude of the trajectory.
-
-    augmented_trajectory The trajectory augmented with sectors.
-    min_altitude The min altitude of the trajectory in feet
-    max_altitude The max altitude of the trajectory in feet
-
-    returns the augmented trajectory with the intersected sector list reduced
-    by the elimination.
-
-    """
-    log.debug(f"Eliminate sectors for flight_id: {flight_id}")
-    sectors = augmented_trajectory['sectors']
-    sectors_remaining = remove_sectors(find_high_sectors(sectors, max_altitude), sectors)
-    sector_count = len(sectors_remaining)
-    log.debug("Removed %s high sectors", str(len(sectors) - sector_count))
-    log.debug("Removed high sectors leaving %s", str(len(sectors_remaining)))
-    sectors_remaining = remove_sectors(find_low_sectors(sectors_remaining, min_altitude), sectors_remaining)
-    log.debug("Removed %s low sectors", str(sector_count - len(sectors_remaining)))
-    log.debug("%s sectors remaining", str(len(sectors_remaining)))
-    augmented_trajectory['sectors'] = sectors_remaining
-    return augmented_trajectory
 
 
 def make_geographic_trajectory(augmented_points, flight_id, connection):
@@ -173,14 +127,17 @@ def make_geographic_trajectory(augmented_points, flight_id, connection):
             connection)[0]
 
 
-def make_augmented_trajectory(augmented_points, geographic_trajectory, flight_id, connection, is_user_defined=False):
+def make_augmented_trajectory(augmented_points, geographic_trajectory, flight_id, min_altitude, max_altitude, connection, is_user_defined=False):
     """
+    Makes a trajectory augmented with geographic positions and a list of sectors
+    intersected by the trajectory excluding those that do not meet the altitude range
+    of the trajectory.
     """
     log.debug(f"Creating an augmented trajectory for flight id: {flight_id}")
     if not is_user_defined:
-        sectors = find_sectors_intersected_by(geographic_trajectory, flight_id, ctx.CONTEXT, connection)
+        sectors = find_sectors_intersected_by(geographic_trajectory, flight_id, min_altitude, max_altitude, ctx.CONTEXT, connection)
     else:
-        sectors = find_user_sectors_intersected_by(geographic_trajectory, flight_id, ctx.CONTEXT, connection)
+        sectors = find_user_sectors_intersected_by(geographic_trajectory, flight_id, min_altitude, max_altitude, ctx.CONTEXT,  connection)
     return {'extendedPoints': augmented_points,
             'line': geographic_trajectory,
             'sectors': sectors,
@@ -242,8 +199,30 @@ def originates(first_point, polygon_string, flight_id, sector_id, connection):
     return originates
 
 
-def find_line_poly_intersection_with_boundary(lineString, polygonString, connection):
+def find_line_poly_intersection_without_boundary(lineString, polygonString, connection):
+    """
+    Use the geo db to find the intersections between the linestring and the unbounded polygon string.
+    The polygon is assumed to _NOT_ have a boundary around it.
+    """
     query = "SELECT ST_AsText(ST_Intersection(%s::geography, ST_Force2D(ST_Boundary(%s))::geography));"
+    params = [lineString, polygonString]
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            res = cursor.fetchall()
+            return {'segmentStrings': res,
+                    'ploygonString': polygonString}
+    except Error:
+        log.exception("Failed to find intersection : Error")
+        return []
+
+
+def find_line_poly_intersection_with_boundary(lineString, polygonString, connection):
+    """
+    Use the geo db to find the intersections between the linestring and the bounded polygon string.
+    The polygon is assumed to already have a boundary around it.
+    """
+    query = "SELECT unit.find_intersections(%s, %s)"
     params = [lineString, polygonString]
     try:
         with connection.cursor() as cursor:
@@ -268,23 +247,18 @@ def find_intersections(augmented_trajectory, min_altitude, max_altitude, flight_
     first_point_lat = augmented_trajectory['extendedPoints'][0]['lat']
     is_user_defined = augmented_trajectory['is_user_defined']
 
-    # Eliminate sectors that are below and above the min and max altitude of
-    # the trajectory.
-    reduced_trajectory = eliminate_sectors(augmented_trajectory, min_altitude, max_altitude, flight_id)
-
     # Find each sector
-    sector_IDs = [sector[0] for sector in reduced_trajectory['sectors']]
+    sector_IDs = [sector[0] for sector in augmented_trajectory['sectors']]
     log.debug("Found sector ids %s", str(sector_IDs))
     sectors = [find_airspace_by_database_ID(str(sector_id),
                                             ctx.CONTEXT,
                                             connection, is_user_defined)[0] for sector_id in sector_IDs]
     # Find the points of the trajectory where the trajectory intersects
     # with each sector
-
     if is_user_defined:
         segments = [{'flight_id': flight_id,
-                     'intersections': find_line_poly_intersection_with_boundary(reduced_trajectory['line'],
-                                                                                sector['wkt'],
+                     'intersections': find_line_poly_intersection_with_boundary(augmented_trajectory['line'],
+                                                                                sector['bounded_sector'],
                                                                                 connection),
                      'origin': {'is_origin': originates(first_point, sector['wkt'], flight_id, sector['id'], connection),
                                 'origin_lat': first_point_lat,
@@ -299,8 +273,8 @@ def find_intersections(augmented_trajectory, min_altitude, max_altitude, flight_
                      'is_user_defined': is_user_defined} for sector in sectors]
     else:
         segments = [{'flight_id': flight_id,
-                     'intersections': find_line_poly_intersection_with_boundary(reduced_trajectory['line'],
-                                                                                sector['wkt'],
+                     'intersections': find_line_poly_intersection_with_boundary(augmented_trajectory['line'],
+                                                                                sector['bounded_sector'],
                                                                                 connection),
                      'origin': {'is_origin': originates(first_point, sector['wkt'], flight_id, sector['id'], connection),
                                 'origin_lat': first_point_lat,

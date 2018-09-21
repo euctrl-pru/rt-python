@@ -19,7 +19,8 @@ from pru.db.common_operations import NM_CONVERSION_TO_M, create_buffer
 import pru.db.context as ctx
 from pru.logger import logger
 from psycopg2.extensions import AsIs
-from psycopg2 import DataError, InternalError, OperationalError, Error, ProgrammingError, IntegrityError
+from psycopg2 import DataError, InternalError, OperationalError, Error
+from psycopg2 import ProgrammingError, IntegrityError
 
 
 log = logger(__name__)
@@ -171,6 +172,28 @@ def make_db_spatial(context, connection):
         return False
 
 
+def add_find_poly_line_intersection_function(connection, schema_name):
+    """
+    Adds a function find_intersections to the database.
+    """
+    sql = "CREATE OR REPLACE FUNCTION %s.find_intersections(linestring VARCHAR, polygon_geometry geometry) \
+           returns TABLE ( \
+           st_astext text \
+           ) AS $$ \
+            BEGIN \
+              RETURN QUERY SELECT ST_AsText(ST_Intersection(linestring::geography, ST_Force2D(polygon_geometry)::geography)); \
+            END; $$\
+            LANGUAGE plpgsql;"
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, [schema_name])
+        log.info("Added stored function find_intersections")
+        return True
+    except Error:
+        log.exception("Failed trying to add the find_intersections function as a stored function")
+        return False
+
+
 def create_airspace_table(context, connection):
     """
     Creates a table of airspaces as a geographic table.
@@ -192,7 +215,8 @@ def create_airspace_table(context, connection):
                            "av_name varchar(100),"
                            "sector_type varchar(2),"
                            "object_id int,"
-                           "wkt geometry);", [schema_name])
+                           "wkt geometry,"
+                           "bounded_sector geometry);", [schema_name])
             cursor.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %s TO %s;",
                            [schema_name, admin_name])
             cursor.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %s TO %s;",
@@ -201,9 +225,9 @@ def create_airspace_table(context, connection):
                            [schema_name, admin_name])
             cursor.execute("GRANT ALL PRIVILEGES ON %s.sectors TO %s;",
                            [schema_name, user_name])
-        return True
+        return add_find_poly_line_intersection_function(connection, schema_name)
     except Error:
-        log.exception("Failed trying to make the sectors table geographic")
+        log.exception("Failed trying to make the sectors table")
         return False
 
 
@@ -229,7 +253,8 @@ def create_user_sector_table(context, connection):
                            "min_altitude int NOT NULL,"
                            "max_altitude int NOT NULL,"
                            "is_cylinder boolean NOT NULL DEFAULT FALSE,"
-                           "wkt geometry, "
+                           "wkt geometry,"
+                           "bounded_sector geometry ,"
                            "UNIQUE(org_id, user_id, sector_name));", [schema_name])
             cursor.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %s TO %s;",
                            [schema_name, admin_name])
@@ -255,15 +280,15 @@ def add_airspace_geometry(airspace, context, connection):
             cursor.execute("INSERT INTO %s.sectors (ac_id, av_airspace_id, "
                            "av_icao_state_id, "
                            "min_altitude, max_altitude, "
-                           "av_name, sector_type, object_id, wkt) VALUES "
+                           "av_name, sector_type, object_id, wkt, bounded_sector) VALUES "
                            "(%s, %s, %s, %s, %s, %s, %s, %s, "
-                           "ST_GEOMFROMTEXT((%s), 4326)) RETURNING id;",
+                           "ST_GEOMFROMTEXT((%s), 4326), ST_Boundary(ST_GEOMFROMTEXT((%s), 4326))) RETURNING id;",
                            (schema_name, str(airspace[0]), airspace[1],
                             airspace[2],
                             100 * int(airspace[3]),
                             100 * int(airspace[4]),
                             airspace[5], airspace[6], airspace[7],
-                            airspace[8]))
+                            airspace[8], airspace[8]))
             id = cursor.fetchone()[0]
     except DataError:
         log.exception('Failed to add airspace record ' + str(airspace) +
@@ -392,14 +417,14 @@ def create_user_sector_parameters(schema_name, user_sector, connection):
                 lon, radius,
                 min_fl,
                 max_fl,
-                True, buffer)
+                True, buffer, buffer)
     else:
         return (schema_name, org_id, user_id,
                 sector_name, lat,
                 lon, radius,
                 min_fl,
                 max_fl,
-                False, wkt)
+                False, wkt, wkt)
 
 
 def add_user_sector(user_sector, context, connection):
@@ -412,9 +437,9 @@ def add_user_sector(user_sector, context, connection):
             cursor.execute("INSERT INTO %s.user_defined_sectors (org_id, "
                            "user_id, sector_name, latitude, longitude, "
                            "radius, min_altitude, "
-                           "max_altitude, is_cylinder, wkt) VALUES "
+                           "max_altitude, is_cylinder, wkt, bounded_sector) VALUES "
                            "(%s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                           "ST_GEOMFROMTEXT((%s), 4326)) RETURNING id;",
+                           "ST_GEOMFROMTEXT((%s), 4326), ST_Boundary(ST_GEOMFROMTEXT((%s), 4326))) RETURNING id;",
                            create_user_sector_parameters(schema_name, user_sector, connection))
             id = cursor.fetchone()[0]
     except DataError:

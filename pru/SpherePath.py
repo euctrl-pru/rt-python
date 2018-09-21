@@ -15,6 +15,9 @@ from .SphereTurnArc import SphereTurnArc, calculate_arc_length, \
 from .sphere_functions import find_index_and_ratio
 from .trajectory_functions import calculate_value_reference, rad2nm
 
+DEFAULT_MIN_ARC_LENGTH = 0.5
+""" The default minimum arc length in Nautical Miles, 0.5 NM. """
+
 
 class PointType:
     """The types of EcefPath Points."""
@@ -644,7 +647,7 @@ class SpherePath:
 
         return distances_nm, point_types
 
-    def calculate_positions(self, distances):
+    def calculate_positions(self, distances, min_arc_length=DEFAULT_MIN_ARC_LENGTH):
         """
         Calculate the positions of points at distances along the path.
 
@@ -653,6 +656,10 @@ class SpherePath:
         distances: float array
             An array of ordered path distances along the EcefPath in
             [Nautical Miles].
+
+        min_arc_length : float
+            The minimum length of an arc between two points, default DEFAULT_MIN_ARC_LENGTH
+            in [Nautical Miles].
 
         Returns
         -------
@@ -676,8 +683,12 @@ class SpherePath:
                     next_distance = path_distance_nm + path_length_nm
 
             # Calculate the ratio along the path leg
-            ratio = (distances[i] - path_distance_nm) / path_length_nm
-            position = self.calculate_position(path_index, ratio)
+            position = self.points[path_index]
+            if path_length_nm >= min_arc_length:
+                ratio = (distances[i] - path_distance_nm) / path_length_nm
+                if ratio >= 0.0:
+                    position = self.calculate_position(path_index, min(ratio, 1.0))
+
             positions.append(position)
 
         return to_array(positions)

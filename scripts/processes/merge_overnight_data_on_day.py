@@ -16,7 +16,7 @@ from pru.trajectory_files import create_merge_overnight_flight_data_input_filena
     create_clean_position_data_filenames, CPR_FR24
 
 from pru.filesystem.data_store_operations import get_processed, put_processed, \
-    SOURCES_MERGED_OVERNIGHT_CPR_FR24, PRODUCTS_ERROR_METRICS_CPR_FR24_OVERNIGHT
+    REFINED_MERGED_OVERNIGHT_CPR_FR24, PRODUCTS_ERROR_METRICS_CPR_FR24_OVERNIGHT
 
 from apps.merge_overnight_flight_data import merge_overnight_flight_data
 from pru.trajectory_cleaning import DEFAULT_MAX_SPEED, DEFAULT_DISTANCE_ACCURACY
@@ -52,7 +52,7 @@ def merge_overnight_data_on_day(date, max_speed=DEFAULT_MAX_SPEED,
         log.info(f'Getting data for date: {date}')
 
         merge_files = create_merge_overnight_flight_data_input_filenames(date)
-        if not get_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24, merge_files):
+        if not get_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24, merge_files):
             log.error('Flights file not found in overnight_cpr_fr24 bucket')
             return errno.ENOENT
 
@@ -61,7 +61,7 @@ def merge_overnight_data_on_day(date, max_speed=DEFAULT_MAX_SPEED,
             return error_code
 
         output_files = create_merge_overnight_flight_data_output_filenames(date)
-        if not put_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24, output_files):
+        if not put_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24, output_files):
             log.error('Could not merged files to overnight_cpr_fr24 bucket')
             return errno.EACCES
 
@@ -73,7 +73,7 @@ def merge_overnight_data_on_day(date, max_speed=DEFAULT_MAX_SPEED,
 
         filenames = create_clean_position_data_filenames(CPR_FR24, date)
 
-        source_path = SOURCES_MERGED_OVERNIGHT_CPR_FR24
+        source_path = REFINED_MERGED_OVERNIGHT_CPR_FR24
         if not put_processed(source_path, filenames[:1]):
             log.error('Could not write file: {filenames[:1]} to bucket')
             return errno.EACCES

@@ -12,27 +12,27 @@ import os
 import gc
 import subprocess
 from pru.env.env_constants import DATA_HOME, UPLOAD_DIR
-from pru.filesystem.data_store_operations import SOURCES_CPR, SOURCES_FR24, SOURCES_APDS, \
+from pru.filesystem.data_store_operations import REFINED_CPR, REFINED_FR24, REFINED_APDS, \
     FLEET_DATA_DIR, \
-    SOURCES, MERGED, DAILY_CPR_FR24, PRODUCTS, PRODUCTS_FLEET, AIRPORTS, \
-    SOURCES_MERGED_DAILY_CPR_FR24, SOURCES_MERGED_DAILY_CPR_FR24_IDS, \
-    SOURCES_MERGED_OVERNIGHT_CPR_FR24, SOURCES_MERGED_OVERNIGHT_CPR_FR24_IDS, \
+    REFINED, MERGED, DAILY_CPR_FR24, PRODUCTS, PRODUCTS_FLEET, AIRPORTS, \
+    REFINED_MERGED_DAILY_CPR_FR24, REFINED_MERGED_DAILY_CPR_FR24_IDS, \
+    REFINED_MERGED_OVERNIGHT_CPR_FR24, REFINED_MERGED_OVERNIGHT_CPR_FR24_IDS, \
     PRODUCTS_ERROR_METRICS_CPR_FR24_OVERNIGHT, PRODUCTS_INTERSECTIONS_SECTOR, \
     PRODUCTS_INTERSECTIONS_AIRPORT, PRODUCTS_INTERSECTIONS_USER, \
-    SOURCES_MERGED_APDS_CPR_FR24, SOURCES_MERGED_APDS_CPR_FR24_IDS, \
+    REFINED_MERGED_APDS_CPR_FR24, REFINED_MERGED_APDS_CPR_FR24_IDS, \
     path_exists, get_unprocessed, put_processed, get_processed, \
     get_airports, get_apds, get_stands, AIRPORTS_STANDS
 from pru.trajectory_fields import iso8601_previous_day, split_dual_date, \
     read_iso8601_date_string, CSV_FILE_EXTENSION, JSON_FILE_EXTENSION
 from pru.trajectory_files import DEFAULT_AIRPORTS_FILENAME, DEFAULT_STANDS_FILENAME, \
     APDS, CPR, FR24, CPR_FR24, PREV_DAY, NEW, REF, RAW_CPR_FR24, ERROR_METRICS, \
-    TRAJECTORIES, TRAJ_METRICS, REF_POSITIONS, \
+    TRAJECTORIES, TRAJ_METRICS, SYNTH_POSITIONS, \
     SECTOR_INTERSECTIONS, AIRPORT_INTERSECTIONS, USER_INTERSECTIONS, \
     create_original_cpr_filename, create_original_fr24_data_filenames, \
     create_flights_filename, create_positions_filename, \
     create_convert_cpr_filenames, create_convert_fr24_filenames, \
     create_fleet_data_filename, create_raw_positions_filename, \
-    create_trajectories_filename, create_ref_positions_filename, \
+    create_trajectories_filename, \
     create_clean_position_data_filenames, create_analyse_position_data_filenames, \
     create_match_cpr_adsb_input_filenames, create_match_cpr_adsb_output_filenames, \
     create_merge_cpr_adsb_input_filenames, create_merge_cpr_adsb_output_filenames, \
@@ -120,8 +120,8 @@ def clean_raw_positions_data(source, date, max_speed=DEFAULT_MAX_SPEED,
 
     os.remove(filenames[1])  # delete the error metrics file
 
-    source_path = '/'.join([SOURCES, MERGED, DAILY_CPR_FR24]) \
-        if (source == CPR_FR24) else '/'.join([SOURCES, source])
+    source_path = '/'.join([REFINED, MERGED, DAILY_CPR_FR24]) \
+        if (source == CPR_FR24) else '/'.join([REFINED, source])
     return put_processed(source_path, filenames[:1])
 
 
@@ -149,7 +149,7 @@ def convert_cpr_file(date):
 
     os.remove(cpr_filename)  # delete the uploaded CPR file
 
-    return put_processed(SOURCES_CPR, create_convert_cpr_filenames(date))
+    return put_processed(REFINED_CPR, create_convert_cpr_filenames(date))
 
 
 def convert_fr24_date(date):
@@ -177,7 +177,7 @@ def convert_fr24_date(date):
     # delete the uploaded FR24 files
     [os.remove(file_path) for file_path in filenames]
 
-    return put_processed(SOURCES_FR24, create_convert_fr24_filenames(date))
+    return put_processed(REFINED_FR24, create_convert_fr24_filenames(date))
 
 
 def convert_airport_codes(date, airports_filename=DEFAULT_AIRPORTS_FILENAME):
@@ -211,7 +211,7 @@ def convert_airport_codes(date, airports_filename=DEFAULT_AIRPORTS_FILENAME):
 
     os.remove(iata_filename)  # delete the iata flights file
 
-    return put_processed(SOURCES_FR24, [create_flights_filename(FR24, date)])
+    return put_processed(REFINED_FR24, [create_flights_filename(FR24, date)])
 
 
 def extract_fleet_date(date):
@@ -264,7 +264,7 @@ def match_cpr_adsb_trajectories_on(date):
         return False
     gc.collect()
 
-    return put_processed(SOURCES_MERGED_DAILY_CPR_FR24_IDS,
+    return put_processed(REFINED_MERGED_DAILY_CPR_FR24_IDS,
                          create_match_cpr_adsb_output_filenames(date))
 
 
@@ -290,7 +290,7 @@ def merge_cpr_adsb_trajectories_on(date):
     # delete the source input files
     [os.remove(file_path) for file_path in filenames]
 
-    return put_processed(SOURCES_MERGED_DAILY_CPR_FR24,
+    return put_processed(REFINED_MERGED_DAILY_CPR_FR24,
                          create_merge_cpr_adsb_output_filenames(date))
 
 
@@ -315,7 +315,7 @@ def match_previous_days_flights(date):
             not path_exists(merge_files[3]) or \
             not path_exists(merge_files[5]):
         log.debug("Getting files %s, %s, %s", merge_files[1], merge_files[3], merge_files[5])
-        if not get_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24, merge_files[1::2]):
+        if not get_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24, merge_files[1::2]):
             log.error('Previous days files not found in overnight_cpr_fr24 bucket')
             return False
 
@@ -324,7 +324,7 @@ def match_previous_days_flights(date):
             not path_exists(merge_files[4]) or \
             not path_exists(merge_files[6]):
         log.debug("Getting files %s, %s, %s", merge_files[2], merge_files[4], merge_files[6])
-        if not get_processed(SOURCES_MERGED_DAILY_CPR_FR24, merge_files[2::2]):
+        if not get_processed(REFINED_MERGED_DAILY_CPR_FR24, merge_files[2::2]):
             log.error('Current days files not found in daily_cpr_fr24 bucket')
             return False
 
@@ -334,7 +334,7 @@ def match_previous_days_flights(date):
     gc.collect()
 
     prev_ids_filename = create_matching_ids_filename(PREV_DAY, date)
-    return put_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24_IDS, [prev_ids_filename])
+    return put_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24_IDS, [prev_ids_filename])
 
 
 def merge_previous_days_data(date):
@@ -367,7 +367,7 @@ def merge_previous_days_data(date):
     os.rename(filenames[3], raw_positions_filename)
     filenames[3] = raw_positions_filename
 
-    copied_ok = put_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24, filenames[1:])
+    copied_ok = put_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24, filenames[1:])
     if copied_ok:
         [os.remove(file_path) for file_path in filenames[:3]]
         # Don't remove the raw positions file
@@ -410,7 +410,7 @@ def clean_overnight_cpr_fr24_positions(date, max_speed=DEFAULT_MAX_SPEED,
 
     # Put the error metrics file first
     filenames = create_clean_position_data_filenames(CPR_FR24, date)
-    if not put_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24, filenames[:1]):
+    if not put_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24, filenames[:1]):
         return False
 
     if not put_processed(PRODUCTS_ERROR_METRICS_CPR_FR24_OVERNIGHT, filenames[1:]):
@@ -465,8 +465,8 @@ def analyse_positions_on_date(date, source=CPR_FR24, *,
     """
     positions_filename = create_positions_filename(source, date)
 
-    source_path = SOURCES_MERGED_OVERNIGHT_CPR_FR24 if (source == CPR_FR24) else \
-        '/'.join([SOURCES, source])
+    source_path = REFINED_MERGED_OVERNIGHT_CPR_FR24 if (source == CPR_FR24) else \
+        '/'.join([REFINED, source])
     get_processed(source_path, [positions_filename])
 
     log.info("Analysing position data for file %s", positions_filename)
@@ -525,11 +525,11 @@ def interpolate_trajectory_file(trajectory_filename, source=CPR_FR24,
 
     os.remove(trajectory_filename)  # delete the trajectory file
 
-    output_filename = trajectory_filename.replace(TRAJECTORIES, REF_POSITIONS)
+    output_filename = trajectory_filename.replace(TRAJECTORIES, SYNTH_POSITIONS)
     output_filename = output_filename.replace(JSON_FILE_EXTENSION,
                                               CSV_FILE_EXTENSION)
 
-    output_path = '/'.join([PRODUCTS, REF_POSITIONS, source])
+    output_path = '/'.join([PRODUCTS, SYNTH_POSITIONS, source])
     return put_processed(output_path, [output_filename])
 
 
@@ -569,7 +569,7 @@ def refine_apds_file(apds_filename, stands_filename=DEFAULT_STANDS_FILENAME):
     os.remove(apds_path_name)  # delete the uploaded APDS file
 
     from_date, to_date = split_dual_date(apds_filename)
-    return put_processed(SOURCES_APDS,
+    return put_processed(REFINED_APDS,
                          create_convert_apds_filenames(from_date, to_date))
 
 
@@ -598,13 +598,13 @@ def match_apds_trajectories_on_day(from_date, to_date, date):
             not path_exists(apds_filenames[1]) or \
             not path_exists(apds_filenames[2]):
         log.debug("Getting apds files: %s", str(apds_filenames))
-        if not get_processed(SOURCES_APDS, apds_filenames):
+        if not get_processed(REFINED_APDS, apds_filenames):
             log.error('APDS files not found in sources/apds bucket')
             return False
 
     day_filenames = create_daily_filenames(date)
     log.debug("Getting days files: %s", str(day_filenames))
-    if not get_processed(SOURCES_MERGED_OVERNIGHT_CPR_FR24, day_filenames):
+    if not get_processed(REFINED_MERGED_OVERNIGHT_CPR_FR24, day_filenames):
         log.error('Data files not found in overnight_cpr_fr24 bucket')
         return False
 
@@ -614,7 +614,7 @@ def match_apds_trajectories_on_day(from_date, to_date, date):
         return False
     gc.collect()
 
-    return put_processed(SOURCES_MERGED_APDS_CPR_FR24_IDS,
+    return put_processed(REFINED_MERGED_APDS_CPR_FR24_IDS,
                          [create_matching_ids_filename(APDS, date)])
 
 
@@ -651,14 +651,14 @@ def merge_apds_trajectories_on_day(from_date, to_date, date):
     # rename the flights file to add APDS to the start
     apds_flight_filename = '_'.join([APDS, day_filenames[0]])
     os.rename(day_filenames[0], apds_flight_filename)
-    ok = put_processed(SOURCES_MERGED_APDS_CPR_FR24, [apds_flight_filename])
+    ok = put_processed(REFINED_MERGED_APDS_CPR_FR24, [apds_flight_filename])
     if ok:
         os.remove(apds_flight_filename)
     else:
         return False
 
     output_filenames = create_merge_apds_output_filenames(date)
-    ok = put_processed(SOURCES_MERGED_APDS_CPR_FR24, output_filenames)
+    ok = put_processed(REFINED_MERGED_APDS_CPR_FR24, output_filenames)
     if ok:  # delete the output files
         [os.remove(file_path) for file_path in output_filenames]
 
@@ -704,8 +704,8 @@ def find_trajectory_airport_intersections(trajectory_filename, source=CPR_FR24,
     date = read_iso8601_date_string(trajectory_filename, is_json=True)
     flights_filename = create_flights_filename(source, date)
     if not path_exists(flights_filename):
-        source_path = SOURCES_MERGED_OVERNIGHT_CPR_FR24 \
-            if (source == CPR_FR24) else '/'.join([SOURCES, source])
+        source_path = REFINED_MERGED_OVERNIGHT_CPR_FR24 \
+            if (source == CPR_FR24) else '/'.join([REFINED, source])
         if not get_processed(source_path, [flights_filename]):
             log.error('Flights file not found in %s bucket', source_path)
             return False

@@ -41,7 +41,7 @@ ERROR_METRICS = 'error_metrics'
 MATCHING_IDS = 'matching_ids'
 TRAJECTORIES = 'trajectories'
 TRAJ_METRICS = 'traj_metrics'
-REF_POSITIONS = 'ref_positions'
+SYNTH_POSITIONS = 'synth_positions'
 
 INTERSECTIONS = 'intersections'
 SECTOR = 'sector'
@@ -109,15 +109,6 @@ def create_positions_filename(process, datestring):
     CPR, FR24, CPR_FR24, etc.
     """
     return '_'.join([process, POSITIONS, datestring + CSV_FILE_EXTENSION])
-
-
-def create_ref_positions_filename(process, datestring):
-    """
-    Create a filename string for a ref positions file.
-    Note: process is the name of the process that created the original positions
-    file: CPR, FR24, CPR_FR24, etc.
-    """
-    return '_'.join([process, REF_POSITIONS, datestring + CSV_FILE_EXTENSION])
 
 
 def create_raw_positions_filename(process, datestring):
