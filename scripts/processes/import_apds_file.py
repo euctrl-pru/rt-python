@@ -13,7 +13,7 @@ from pru.trajectory_fields import split_dual_date
 from pru.trajectory_files import DEFAULT_STANDS_FILENAME, \
     create_convert_apds_filenames
 from pru.filesystem.data_store_operations import get_apds, get_stands, \
-    put_processed, SOURCES_APDS
+    put_processed, REFINED_APDS
 from apps.convert_apt_data import convert_apds_data
 from pru.logger import logger
 
@@ -50,7 +50,7 @@ def import_apds_file(apds_filename, stands_filename=DEFAULT_STANDS_FILENAME):
         return False
 
     from_date, to_date = split_dual_date(apds_filename)
-    return put_processed(SOURCES_APDS,
+    return put_processed(REFINED_APDS,
                          create_convert_apds_filenames(from_date, to_date))
 
 
