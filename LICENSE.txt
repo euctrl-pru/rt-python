@@ -1,8 +1,8 @@
 Copyright (c) 2017-2018 Via Technology Ltd.
 
-Permission is hereby granted, upon final payment of Contract No.17-110452-C,
+Permission is hereby granted, upon final payment of Amendment No. 1 to Contract No.17-110452-C,
 for the contractee Eurocontrol, or agent thereof, to use commits up to and including
-tag 1.0.0 of this software and associated documentation files (the "Software"),
+tag 1.3.0 of this software and associated documentation files (the "Software"),
 to deal in the Software without restriction, including without limitation the
 rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
 sell copies of the Software, and to permit persons to whom the Software is
